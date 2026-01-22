@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-#include <cctype>
 #include <cmath>
 
 #include "../../chimera.hpp"
 #include "../../signature/hook.hpp"
 #include "../../signature/signature.hpp"
-#include "../../halo_data/multiplayer.hpp"
 #include "../../halo_data/pause.hpp"
 #include "../../event/camera.hpp"
 #include "../../event/frame.hpp"
 #include "../../event/tick.hpp"
 #include "../../event/revert.hpp"
-#include "../../halo_data/game_engine.hpp"
-#include "../../output/output.hpp"
 
 #include "antenna.hpp"
 #include "camera.hpp"
@@ -22,31 +18,21 @@
 #include "light.hpp"
 #include "object.hpp"
 #include "particle.hpp"
-
 #include "interpolate.hpp"
 
 namespace Chimera {
 
-    // Progress since last tick (0.0 → 1.0)
+    // Alpha [0..1] since last tick
     float interpolation_tick_progress = 0.0f;
 
     static float *first_person_camera_tick_rate = nullptr;
     bool interpolation_enabled = false;
 
-    // ====== 240 FPS SAFETY ======
-    static float last_interp_progress = 0.0f;
-
-    // ~8 ms delay @ 30 ticks/sec (Valorant-like buffer)
-    constexpr float INTERP_DELAY = 0.25f;
-
-    constexpr float MIN_PROGRESS_DELTA = 0.0001f;
-
     static inline float clamp01(float v) noexcept {
-        if(v < 0.0f) return 0.0f;
-        if(v > 1.0f) return 1.0f;
-        return v;
+        return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
     }
 
+    // ===== TICK =====
     static void on_tick() noexcept {
         if(game_paused()) {
             return;
@@ -61,32 +47,20 @@ namespace Chimera {
         interpolate_particle_on_tick();
 
         interpolation_tick_progress = 0.0f;
-        last_interp_progress = 0.0f;
 
-        float current_tick_rate = effective_tick_rate();
-        if(*first_person_camera_tick_rate != current_tick_rate) {
-            overwrite(first_person_camera_tick_rate, current_tick_rate);
+        float tick_rate = effective_tick_rate();
+        if(*first_person_camera_tick_rate != tick_rate) {
+            overwrite(first_person_camera_tick_rate, tick_rate);
         }
     }
 
+    // ===== PRE-FRAME (INTERPOLATION) =====
     static void on_preframe() noexcept {
         if(game_paused()) {
             return;
         }
 
-        float raw = get_tick_progress();
-
-        // Apply interpolation delay (critical for 240 FPS stability)
-        float delayed = raw - INTERP_DELAY;
-
-        interpolation_tick_progress = clamp01(delayed);
-
-        float delta = interpolation_tick_progress - last_interp_progress;
-        if(delta <= MIN_PROGRESS_DELTA) {
-            return; // skip meaningless frames (prevents float jitter)
-        }
-
-        last_interp_progress = interpolation_tick_progress;
+        interpolation_tick_progress = clamp01(get_tick_progress());
 
         interpolate_antenna_before();
         interpolate_flag_before();
@@ -95,6 +69,7 @@ namespace Chimera {
         interpolate_particle();
     }
 
+    // ===== FRAME END (ROLLBACK) =====
     static void on_frame() noexcept {
         if(game_paused()) {
             return;
@@ -136,7 +111,7 @@ namespace Chimera {
             reinterpret_cast<const void *>(interpolate_fp_after)
         );
 
-        // Disable built-in FP interpolation
+        // Disable Halo built-in FP interpolation
         overwrite(
             get_chimera().get_signature("camera_interpolation_sig").data() + 0xF,
             static_cast<unsigned char>(0xEB)
