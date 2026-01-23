@@ -1,64 +1,64 @@
-
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "../../halo_data/camera.hpp"
 #include "../../halo_data/pause.hpp"
+
 #include "fp_motion_blur.hpp"
 
 namespace Chimera {
 
-    static float last_yaw = 0.0f;
-    static float last_pitch = 0.0f;
+    static float last_yaw   = 0.0f; // y
+    static float last_pitch = 0.0f; // x
+    static bool  has_last   = false;
 
-    static float blurred_yaw = 0.0f;
-    static float blurred_pitch = 0.0f;
-
-    static bool initialized = false;
-
-    constexpr float BLUR_STRENGTH = 0.15f;
+    constexpr float BLUR_STRENGTH = 0.35f;
 
     void fp_motion_blur_before() noexcept {
         if(game_paused()) {
             return;
         }
 
-        auto &cam = camera_data();
+        auto &cam = get_first_person_camera();
 
-        if(!initialized) {
-            last_yaw = cam.orientation[0].yaw;
-            last_pitch = cam.orientation[0].pitch;
-            blurred_yaw = last_yaw;
-            blurred_pitch = last_pitch;
-            initialized = true;
+        float current_pitch = cam.orientation[0].x;
+        float current_yaw   = cam.orientation[0].y;
+
+        if(!has_last) {
+            last_pitch = current_pitch;
+            last_yaw   = current_yaw;
+            has_last   = true;
             return;
         }
 
-        float yaw_delta = cam.orientation[0].yaw - last_yaw;
-        float pitch_delta = cam.orientation[0].pitch - last_pitch;
+        float pitch_delta = current_pitch - last_pitch;
+        float yaw_delta   = current_yaw   - last_yaw;
 
-        blurred_yaw += yaw_delta * BLUR_STRENGTH;
-        blurred_pitch += pitch_delta * BLUR_STRENGTH;
-
-        last_yaw = cam.orientation[0].yaw;
-        last_pitch = cam.orientation[0].pitch;
-
-        cam.orientation[0].yaw = blurred_yaw;
-        cam.orientation[0].pitch = blurred_pitch;
+        cam.orientation[0].x = current_pitch - pitch_delta * BLUR_STRENGTH;
+        cam.orientation[0].y = current_yaw   - yaw_delta   * BLUR_STRENGTH;
     }
 
     void fp_motion_blur_after() noexcept {
-        if(game_paused()) {
+        if(!has_last || game_paused()) {
             return;
         }
 
-        auto &cam = camera_data();
-        cam.orientation[0].yaw = last_yaw;
-        cam.orientation[0].pitch = last_pitch;
+        auto &cam = get_first_person_camera();
+
+        cam.orientation[0].x = last_pitch;
+        cam.orientation[0].y = last_yaw;
+
+        last_pitch = cam.orientation[0].x;
+        last_yaw   = cam.orientation[0].y;
     }
 
     void fp_motion_blur_clear() noexcept {
-        initialized = false;
+        has_last = false;
     }
+
+    void fp_motion_blur_on_tick() noexcept {
+        has_last = false;
+    }
+
 }
 
 
