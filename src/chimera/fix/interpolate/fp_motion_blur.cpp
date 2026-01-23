@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-#include "../../halo_data/camera.hpp"
-#include "../../event/camera.hpp"
+#include "fp_motion_blur.hpp"
 
 namespace Chimera {
 
@@ -9,30 +8,40 @@ namespace Chimera {
     static float last_yaw   = 0.0f;
     static bool  valid_last = false;
 
-    static constexpr float BLUR_STRENGTH = 0.65f;
+    static constexpr float BLUR_STRENGTH = 0.6f;
 
-    void fp_motion_blur_before() noexcept {
-        // NO tocamos la cámara lógica
-        // solo guardamos estado
-        auto &cam = get_first_person_camera();
+    // Se llama ANTES del render
+    void fp_motion_blur_before(CameraData &cam) noexcept {
+
+        // Solo primera persona
+        if(cam.type != CameraType::FIRST_PERSON) {
+            return;
+        }
+
+        float pitch = cam.orientation[0].x;
+        float yaw   = cam.orientation[0].y;
 
         if(!valid_last) {
-            last_pitch = cam.orientation[0].x;
-            last_yaw   = cam.orientation[0].y;
+            last_pitch = pitch;
+            last_yaw   = yaw;
             valid_last = true;
             return;
         }
 
-        float dp = cam.orientation[0].x - last_pitch;
-        float dy = cam.orientation[0].y - last_yaw;
+        float dp = pitch - last_pitch;
+        float dy = yaw   - last_yaw;
 
+        // Aplicamos blur SOLO visual
         cam.orientation[0].x -= dp * BLUR_STRENGTH;
         cam.orientation[0].y -= dy * BLUR_STRENGTH;
     }
 
-    void fp_motion_blur_after() noexcept {
-        // restauramos valores EXACTOS
-        auto &cam = get_first_person_camera();
+    // Se llama DESPUÉS del render
+    void fp_motion_blur_after(CameraData &cam) noexcept {
+
+        if(cam.type != CameraType::FIRST_PERSON) {
+            return;
+        }
 
         last_pitch = cam.orientation[0].x;
         last_yaw   = cam.orientation[0].y;
@@ -45,7 +54,6 @@ namespace Chimera {
     }
 
 }
-
 
 
 
