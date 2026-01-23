@@ -1,237 +1,170 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "math_trig.hpp"
+#include <cmath>
+#include <algorithm>
 
 namespace Chimera {
+
+    // =========================
+    // Utilidades
+    // =========================
+    static inline float clamp01(float v) noexcept {
+        return std::max(0.0f, std::min(1.0f, v));
+    }
+
+    // =========================
+    // Color
+    // =========================
     ColorRGB::ColorRGB(float r, float g, float b) noexcept :
-        red(r),
-        green(g),
-        blue(b) {}
-    ColorRGB::ColorRGB(const ColorByte &other) noexcept :
-        red(static_cast<float>(other.red) / 255),
-        green(static_cast<float>(other.green) / 255),
-        blue(static_cast<float>(other.blue) / 255) {}
-    ColorRGB::ColorRGB(const ColorARGB &other) noexcept :
-        red(other.red),
-        green(other.green),
-        blue(other.blue) {}
+        red(clamp01(r)),
+        green(clamp01(g)),
+        blue(clamp01(b)) {}
+
+    ColorRGB::ColorRGB(const ColorByte &o) noexcept :
+        red(o.red / 255.0f),
+        green(o.green / 255.0f),
+        blue(o.blue / 255.0f) {}
+
+    ColorRGB::ColorRGB(const ColorARGB &o) noexcept :
+        red(o.red),
+        green(o.green),
+        blue(o.blue) {}
 
     ColorARGB::ColorARGB(float a, float r, float g, float b) noexcept :
-        alpha(a),
-        red(r),
-        green(g),
-        blue(b) {}
-    ColorARGB::ColorARGB(const ColorByte &other) noexcept :
-        alpha(static_cast<float>(other.alpha) / 255),
-        red(static_cast<float>(other.red) / 255),
-        green(static_cast<float>(other.green) / 255),
-        blue(static_cast<float>(other.blue) / 255) {}
-    ColorARGB::ColorARGB(const ColorRGB &other) noexcept :
-        red(other.red),
-        green(other.green),
-        blue(other.blue) {}
+        alpha(clamp01(a)),
+        red(clamp01(r)),
+        green(clamp01(g)),
+        blue(clamp01(b)) {}
+
+    ColorARGB::ColorARGB(const ColorByte &o) noexcept :
+        alpha(o.alpha / 255.0f),
+        red(o.red / 255.0f),
+        green(o.green / 255.0f),
+        blue(o.blue / 255.0f) {}
+
+    ColorARGB::ColorARGB(const ColorRGB &o) noexcept :
+        alpha(1.0f),
+        red(o.red),
+        green(o.green),
+        blue(o.blue) {}
 
     ColorByte::ColorByte(float a, float r, float g, float b) noexcept :
-        blue(static_cast<unsigned char>(b * 255)),
-        green(static_cast<unsigned char>(g * 255)),
-        red(static_cast<unsigned char>(r * 255)),
-        alpha(static_cast<unsigned char>(a * 255)) {}
-    ColorByte::ColorByte(unsigned char a, unsigned char r, unsigned char g, unsigned char b) noexcept :
-        blue(b),
-        green(g),
-        red(r),
-        alpha(a) {}
-    ColorByte::ColorByte(const ColorRGB &other) noexcept :
-        ColorByte::ColorByte(1.0f, other.red, other.green, other.blue) {}
-    ColorByte::ColorByte(const ColorARGB &other) noexcept :
-        ColorByte::ColorByte(other.alpha, other.red, other.green, other.blue) {}
+        blue(static_cast<unsigned char>(clamp01(b) * 255)),
+        green(static_cast<unsigned char>(clamp01(g) * 255)),
+        red(static_cast<unsigned char>(clamp01(r) * 255)),
+        alpha(static_cast<unsigned char>(clamp01(a) * 255)) {}
 
-    // http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
-    Quaternion::Quaternion(const RotationMatrix &matrix) noexcept {
-        float tr = matrix.v[0].x + matrix.v[1].y + matrix.v[2].z;
-        if(tr > 0) {
-            float S = std::sqrt(tr+1.0f) * 2.0f; // S=4*qw
-            this->w = 0.25f * S;
-            this->x = (matrix.v[2].y - matrix.v[1].z) / S;
-            this->y = (matrix.v[0].z - matrix.v[2].x) / S;
-            this->z = (matrix.v[1].x - matrix.v[0].y) / S;
+    ColorByte::ColorByte(unsigned char a, unsigned char r, unsigned char g, unsigned char b) noexcept :
+        blue(b), green(g), red(r), alpha(a) {}
+
+    ColorByte::ColorByte(const ColorRGB &o) noexcept :
+        ColorByte(1.0f, o.red, o.green, o.blue) {}
+
+    ColorByte::ColorByte(const ColorARGB &o) noexcept :
+        ColorByte(o.alpha, o.red, o.green, o.blue) {}
+
+    // =========================
+    // Quaternion <-> Matrix
+    // =========================
+    Quaternion::Quaternion(const RotationMatrix &m) noexcept {
+        float tr = m.v[0].x + m.v[1].y + m.v[2].z;
+
+        if(tr > 0.0f) {
+            float S = std::sqrt(tr + 1.0f) * 2.0f;
+            w = 0.25f * S;
+            x = (m.v[2].y - m.v[1].z) / S;
+            y = (m.v[0].z - m.v[2].x) / S;
+            z = (m.v[1].x - m.v[0].y) / S;
         }
-        else if((matrix.v[0].x > matrix.v[1].y) & (matrix.v[0].x > matrix.v[2].z)) {
-            float S = std::sqrt(1.0f + matrix.v[0].x - matrix.v[1].y - matrix.v[2].z) * 2.0f; // S=4*qx
-            this->w = (matrix.v[2].y - matrix.v[1].z) / S;
-            this->x = 0.25f * S;
-            this->y = (matrix.v[0].y + matrix.v[1].x) / S;
-            this->z = (matrix.v[0].z + matrix.v[2].x) / S;
-        } else if(matrix.v[1].y > matrix.v[2].z) {
-            float S = std::sqrt(1.0f + matrix.v[1].y - matrix.v[0].x - matrix.v[2].z) * 2.0f; // S=4*qy
-            this->w = (matrix.v[0].z - matrix.v[2].x) / S;
-            this->x = (matrix.v[0].y + matrix.v[1].x) / S;
-            this->y = 0.25f * S;
-            this->z = (matrix.v[1].z + matrix.v[2].y) / S;
-        } else {
-            float S = std::sqrt(1.0f + matrix.v[2].z - matrix.v[0].x - matrix.v[1].y) * 2.0f; // S=4*qz
-            this->w = (matrix.v[1].x - matrix.v[0].y) / S;
-            this->x = (matrix.v[0].z + matrix.v[2].x) / S;
-            this->y = (matrix.v[1].z + matrix.v[2].y) / S;
-            this->z = 0.25f * S;
+        else if((m.v[0].x > m.v[1].y) && (m.v[0].x > m.v[2].z)) {
+            float S = std::sqrt(1.0f + m.v[0].x - m.v[1].y - m.v[2].z) * 2.0f;
+            w = (m.v[2].y - m.v[1].z) / S;
+            x = 0.25f * S;
+            y = (m.v[0].y + m.v[1].x) / S;
+            z = (m.v[0].z + m.v[2].x) / S;
+        }
+        else if(m.v[1].y > m.v[2].z) {
+            float S = std::sqrt(1.0f + m.v[1].y - m.v[0].x - m.v[2].z) * 2.0f;
+            w = (m.v[0].z - m.v[2].x) / S;
+            x = (m.v[0].y + m.v[1].x) / S;
+            y = 0.25f * S;
+            z = (m.v[1].z + m.v[2].y) / S;
+        }
+        else {
+            float S = std::sqrt(1.0f + m.v[2].z - m.v[0].x - m.v[1].y) * 2.0f;
+            w = (m.v[1].x - m.v[0].y) / S;
+            x = (m.v[0].z + m.v[2].x) / S;
+            y = (m.v[1].z + m.v[2].y) / S;
+            z = 0.25f * S;
         }
     }
 
     RotationMatrix::RotationMatrix() noexcept {}
 
-    // http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
-    RotationMatrix::RotationMatrix(const Quaternion &quaternion) noexcept {
-        float sqw = quaternion.w*quaternion.w;
-        float sqx = quaternion.x*quaternion.x;
-        float sqy = quaternion.y*quaternion.y;
-        float sqz = quaternion.z*quaternion.z;
+    RotationMatrix::RotationMatrix(const Quaternion &q) noexcept {
+        float sqw = q.w*q.w;
+        float sqx = q.x*q.x;
+        float sqy = q.y*q.y;
+        float sqz = q.z*q.z;
 
-        // invs (inverse square length) is only required if quaternion is not already normalised
         float invs = 1.0f / (sqx + sqy + sqz + sqw);
-        this->v[0].x = ( sqx - sqy - sqz + sqw)*invs; // since sqw + sqx + sqy + sqz =1/invs*invs
-        this->v[1].y = (-sqx + sqy - sqz + sqw)*invs;
-        this->v[2].z = (-sqx - sqy + sqz + sqw)*invs;
 
-        float tmp1 = quaternion.x*quaternion.y;
-        float tmp2 = quaternion.z*quaternion.w;
-        this->v[1].x = 2.0f * (tmp1 + tmp2)*invs;
-        this->v[0].y = 2.0f * (tmp1 - tmp2)*invs;
+        v[0].x = ( sqx - sqy - sqz + sqw) * invs;
+        v[1].y = (-sqx + sqy - sqz + sqw) * invs;
+        v[2].z = (-sqx - sqy + sqz + sqw) * invs;
 
-        tmp1 = quaternion.x*quaternion.z;
-        tmp2 = quaternion.y*quaternion.w;
-        this->v[2].x = 2.0f * (tmp1 - tmp2)*invs;
-        this->v[0].z = 2.0f * (tmp1 + tmp2)*invs;
-        tmp1 = quaternion.y*quaternion.z;
-        tmp2 = quaternion.x*quaternion.w;
-        this->v[2].y = 2.0f * (tmp1 + tmp2)*invs;
-        this->v[1].z = 2.0f * (tmp1 - tmp2)*invs;
+        float tmp1 = q.x*q.y;
+        float tmp2 = q.z*q.w;
+        v[1].x = 2.0f * (tmp1 + tmp2) * invs;
+        v[0].y = 2.0f * (tmp1 - tmp2) * invs;
+
+        tmp1 = q.x*q.z;
+        tmp2 = q.y*q.w;
+        v[2].x = 2.0f * (tmp1 - tmp2) * invs;
+        v[0].z = 2.0f * (tmp1 + tmp2) * invs;
+
+        tmp1 = q.y*q.z;
+        tmp2 = q.x*q.w;
+        v[2].y = 2.0f * (tmp1 + tmp2) * invs;
+        v[1].z = 2.0f * (tmp1 - tmp2) * invs;
     }
 
-    // special thanks to MosesOfEgypt for the rotation interpolation stuff here
-    void interpolate_quat(const Quaternion &in_before, const Quaternion &in_after, Quaternion &out, float scale) noexcept {
-        auto &w1 = in_before.w;
-        auto &x1 = in_before.x;
-        auto &y1 = in_before.y;
-        auto &z1 = in_before.z;
-        auto w0 = in_after.w;
-        auto x0 = in_after.x;
-        auto y0 = in_after.y;
-        auto z0 = in_after.z;
-        float cos_half_theta = w0*w1 + x0*x1 + y0*y1 + z0*z1;
-        if(cos_half_theta < 0) {
-            w0*=-1;
-            x0*=-1;
-            y0*=-1;
-            z0*=-1;
-            cos_half_theta *= -1;
-        }
-        if(cos_half_theta < 0.01) return;
+    // =========================
+    // Quaternion Interpolation (FIXED)
+    // =========================
+    void interpolate_quat(const Quaternion &a, const Quaternion &b, Quaternion &out, float t) noexcept {
+        float cos_half = a.w*b.w + a.x*b.x + a.y*b.y + a.z*b.z;
 
-        float half_theta;
-        if(std::fabs(cos_half_theta) >= 1.0) {
-            half_theta = 0.0;
+        Quaternion bb = b;
+        if(cos_half < 0.0f) {
+            cos_half = -cos_half;
+            bb.w = -bb.w; bb.x = -bb.x; bb.y = -bb.y; bb.z = -bb.z;
+        }
+
+        if(cos_half > 0.9995f) {
+            out.w = a.w + t*(bb.w - a.w);
+            out.x = a.x + t*(bb.x - a.x);
+            out.y = a.y + t*(bb.y - a.y);
+            out.z = a.z + t*(bb.z - a.z);
         }
         else {
-            half_theta = std::acos(cos_half_theta);
+            float half_theta = std::acos(cos_half);
+            float sin_half = std::sqrt(1.0f - cos_half*cos_half);
+
+            float r0 = std::sin((1.0f - t) * half_theta) / sin_half;
+            float r1 = std::sin(t * half_theta) / sin_half;
+
+            out.w = a.w*r0 + bb.w*r1;
+            out.x = a.x*r0 + bb.x*r1;
+            out.y = a.y*r0 + bb.y*r1;
+            out.z = a.z*r0 + bb.z*r1;
         }
 
-        float sin_half_theta = 0;
-        float m = (1 - cos_half_theta*cos_half_theta);
-        if(m > 0) sin_half_theta = m;
-
-        float r0 = 1 - scale;
-        float r1 = scale;
-        if(sin_half_theta > 0.00001) {
-            r0 = std::sin((1 - scale) * half_theta) / sin_half_theta;
-            r1 = std::sin(scale * half_theta) / sin_half_theta;
-        }
-
-        out.w = w0*r1 + w1*r0;
-        out.x = x0*r1 + x1*r0;
-        out.y = y0*r1 + y1*r0;
-        out.z = z0*r1 + z1*r0;
-    }
-
-    void interpolate_point(const Point3D &before, const Point3D &after, Point3D &output, float scale) noexcept {
-        output.x = before.x + (after.x - before.x) * scale;
-        output.y = before.y + (after.y - before.y) * scale;
-        output.z = before.z + (after.z - before.z) * scale;
-    }
-
-    float distance_squared(float x1, float y1, float x2, float y2) noexcept {
-        float x = x1 - x2;
-        float y = y1 - y2;
-        return x*x + y*y;
-    }
-
-    float distance_squared(float x1, float y1, float z1, float x2, float y2, float z2) noexcept {
-        float x = x1 - x2;
-        float y = y1 - y2;
-        float z = z1 - z2;
-        return x*x + y*y + z*z;
-    }
-
-    float distance_squared(const Point3D &a, const Point3D &b) noexcept {
-        return distance_squared(a.x, a.y, a.z, b.x, b.y, b.z);
-    }
-
-    float distance_squared(const Point2D &a, const Point2D &b) noexcept {
-        return distance_squared(a.x, a.y, b.x, b.y);
-    }
-
-    float distance(float x1, float y1, float x2, float y2) noexcept {
-        return std::sqrt(distance_squared(x1, y1, x2, y2));
-    }
-
-    float distance(float x1, float y1, float z1, float x2, float y2, float z2) noexcept {
-        return std::sqrt(distance_squared(x1, y1, z1, x2, y2, z2));
-    }
-
-    float distance(const Point3D &a, const Point3D &b) noexcept {
-        return std::sqrt(distance_squared(a.x, a.y, a.z, b.x, b.y, b.z));
-    }
-
-    float distance(const Point2D &a, const Point3D &b) noexcept {
-        return std::sqrt(distance_squared(a.x, a.y, b.x, b.y));
-    }
-
-    float magnitude_squared(float x, float y, float z) noexcept {
-        return x*x + y*y + z*z;
-    }
-
-    float magnitude_squared(const Point3D &a) noexcept {
-        return a.x*a.x + a.y*a.y + a.z*a.z;
-    }
-
-    double counter_time_elapsed(const LARGE_INTEGER &before) noexcept {
-        LARGE_INTEGER now;
-        QueryPerformanceCounter(&now);
-        return counter_time_elapsed(before, now);
-    }
-
-    double counter_time_elapsed(const LARGE_INTEGER &before, const LARGE_INTEGER &after) noexcept {
-        static LARGE_INTEGER performance_frequency = {};
-        if(performance_frequency.QuadPart == 0) QueryPerformanceFrequency(&performance_frequency);
-        return static_cast<double>(after.QuadPart - before.QuadPart) / performance_frequency.QuadPart;
-    }
-
-    long fast_ftol(float float_to_round) noexcept {
-        long rounded_down = static_cast<long>(float_to_round);
-
-        long a = rounded_down;
-        long b = rounded_down + 1;
-
-        long low = float_to_round - (static_cast<float>(a));
-        long high = (static_cast<float>(b)) - float_to_round;
-
-        return (low < high) ? a : b;
-    }
-
-    void pixel32_to_real_argb_color(const std::uint32_t pixel, ColorARGB *color) noexcept {
-        color->alpha = ((pixel >> 24) & 0xFF) / 255.0;
-        color->red = ((pixel >> 16) & 0xFF) / 255.0;
-        color->green = ((pixel >> 8) & 0xFF) / 255.0;
-        color->blue = ((pixel >> 0) & 0xFF) / 255.0;
+        // normalize
+        float inv = 1.0f / std::sqrt(out.w*out.w + out.x*out.x + out.y*out.y + out.z*out.z);
+        out.w *= inv; out.x *= inv; out.y *= inv; out.z *= inv;
     }
 
 }
+
