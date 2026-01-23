@@ -48,6 +48,7 @@ namespace Chimera {
             ConsoleColor blue_color = { 1.0, 0.3, 0.6, 1 };
 
             // Show everything
+            console_output(blue_color, "smoothy by anthoniicore");
             console_output(ConsoleColor::header_color(), localize("chimera_command_version"), CHIMERA_VERSION_STRING);
             console_output(blue_color, "Lua API version %.3f", CHIMERA_LUA_VERSION); // TODO: TRANSLATE THIS
             console_output(ConsoleColor::header_color(), localize("chimera_command_categories"));
