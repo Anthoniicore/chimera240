@@ -19,7 +19,6 @@
 #include "object.hpp"
 #include "particle.hpp"
 #include "interpolate.hpp"
-#include "fp_motion_blur.hpp"
 
 namespace Chimera {
 
@@ -106,7 +105,6 @@ namespace Chimera {
         interpolate_flag_clear();
         interpolate_camera_clear();
         interpolate_fp_clear();
-        fp_motion_blur_clear();
     }
 
     void set_up_interpolation() noexcept {
@@ -125,10 +123,6 @@ namespace Chimera {
         // Camera interpolation
         add_precamera_event(interpolate_camera_before);
         add_camera_event(interpolate_camera_after);
-
-        // First-person motion blur (safe & reversible)
-        add_precamera_event(fp_motion_blur_before);
-        add_camera_event(fp_motion_blur_after);
 
         write_jmp_call(
             fp_interp_ptr,
@@ -159,11 +153,9 @@ namespace Chimera {
         remove_precamera_event(interpolate_camera_before);
         remove_camera_event(interpolate_camera_after);
 
-        remove_precamera_event(fp_motion_blur_before);
-        remove_camera_event(fp_motion_blur_after);
-
         remove_revert_event(clear_buffers);
 
         interpolation_enabled = false;
     }
 }
+
