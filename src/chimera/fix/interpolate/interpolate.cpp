@@ -28,6 +28,10 @@ namespace Chimera {
     static float *first_person_camera_tick_rate = nullptr;
     bool interpolation_enabled = false;
 
+    // ---- 240 FPS STABILITY ----
+    static float last_interp_progress = 0.0f;
+    constexpr float MIN_PROGRESS_DELTA = 0.0001f;
+
     static inline float clamp01(float v) noexcept {
         return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
     }
@@ -47,6 +51,7 @@ namespace Chimera {
         interpolate_particle_on_tick();
 
         interpolation_tick_progress = 0.0f;
+        last_interp_progress = 0.0f;
 
         float tick_rate = effective_tick_rate();
         if(*first_person_camera_tick_rate != tick_rate) {
@@ -60,7 +65,20 @@ namespace Chimera {
             return;
         }
 
-        interpolation_tick_progress = clamp01(get_tick_progress());
+        float raw = clamp01(get_tick_progress());
+
+        // Ensure monotonic progress (critical at high FPS)
+        if(raw < last_interp_progress) {
+            raw = last_interp_progress;
+        }
+
+        float delta = raw - last_interp_progress;
+        if(delta < MIN_PROGRESS_DELTA) {
+            return; // skip insignificant frames (prevents jitter)
+        }
+
+        interpolation_tick_progress = raw;
+        last_interp_progress = raw;
 
         interpolate_antenna_before();
         interpolate_flag_before();
@@ -135,4 +153,3 @@ namespace Chimera {
         interpolation_enabled = false;
     }
 }
-
