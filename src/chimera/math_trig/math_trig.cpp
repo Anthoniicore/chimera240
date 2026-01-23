@@ -7,7 +7,7 @@
 namespace Chimera {
 
     // =========================
-    // Utilidades
+    // Helpers
     // =========================
     static inline float clamp01(float v) noexcept {
         return std::max(0.0f, std::min(1.0f, v));
@@ -17,9 +17,7 @@ namespace Chimera {
     // Color
     // =========================
     ColorRGB::ColorRGB(float r, float g, float b) noexcept :
-        red(clamp01(r)),
-        green(clamp01(g)),
-        blue(clamp01(b)) {}
+        red(clamp01(r)), green(clamp01(g)), blue(clamp01(b)) {}
 
     ColorRGB::ColorRGB(const ColorByte &o) noexcept :
         red(o.red / 255.0f),
@@ -27,9 +25,7 @@ namespace Chimera {
         blue(o.blue / 255.0f) {}
 
     ColorRGB::ColorRGB(const ColorARGB &o) noexcept :
-        red(o.red),
-        green(o.green),
-        blue(o.blue) {}
+        red(o.red), green(o.green), blue(o.blue) {}
 
     ColorARGB::ColorARGB(float a, float r, float g, float b) noexcept :
         alpha(clamp01(a)),
@@ -44,10 +40,7 @@ namespace Chimera {
         blue(o.blue / 255.0f) {}
 
     ColorARGB::ColorARGB(const ColorRGB &o) noexcept :
-        alpha(1.0f),
-        red(o.red),
-        green(o.green),
-        blue(o.blue) {}
+        alpha(1.0f), red(o.red), green(o.green), blue(o.blue) {}
 
     ColorByte::ColorByte(float a, float r, float g, float b) noexcept :
         blue(static_cast<unsigned char>(clamp01(b) * 255)),
@@ -131,12 +124,12 @@ namespace Chimera {
     }
 
     // =========================
-    // Quaternion Interpolation (FIXED)
+    // Interpolation
     // =========================
     void interpolate_quat(const Quaternion &a, const Quaternion &b, Quaternion &out, float t) noexcept {
         float cos_half = a.w*b.w + a.x*b.x + a.y*b.y + a.z*b.z;
-
         Quaternion bb = b;
+
         if(cos_half < 0.0f) {
             cos_half = -cos_half;
             bb.w = -bb.w; bb.x = -bb.x; bb.y = -bb.y; bb.z = -bb.z;
@@ -161,9 +154,62 @@ namespace Chimera {
             out.z = a.z*r0 + bb.z*r1;
         }
 
-        // normalize
         float inv = 1.0f / std::sqrt(out.w*out.w + out.x*out.x + out.y*out.y + out.z*out.z);
         out.w *= inv; out.x *= inv; out.y *= inv; out.z *= inv;
+    }
+
+    void interpolate_point(const Point3D &a, const Point3D &b, Point3D &o, float t) noexcept {
+        o.x = a.x + (b.x - a.x) * t;
+        o.y = a.y + (b.y - a.y) * t;
+        o.z = a.z + (b.z - a.z) * t;
+    }
+
+    // =========================
+    // Math helpers
+    // =========================
+    float distance_squared(float x1, float y1, float x2, float y2) noexcept {
+        float dx = x1 - x2;
+        float dy = y1 - y2;
+        return dx*dx + dy*dy;
+    }
+
+    float distance_squared(float x1, float y1, float z1, float x2, float y2, float z2) noexcept {
+        float dx = x1 - x2;
+        float dy = y1 - y2;
+        float dz = z1 - z2;
+        return dx*dx + dy*dy + dz*dz;
+    }
+
+    float distance_squared(const Point3D &a, const Point3D &b) noexcept {
+        return distance_squared(a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+
+    float magnitude_squared(const Point3D &a) noexcept {
+        return a.x*a.x + a.y*a.y + a.z*a.z;
+    }
+
+    long fast_ftol(float f) noexcept {
+        long i = static_cast<long>(f);
+        return (f - i < 0.5f) ? i : i + 1;
+    }
+
+    void pixel32_to_real_argb_color(std::uint32_t p, ColorARGB *c) noexcept {
+        c->alpha = ((p >> 24) & 0xFF) / 255.0f;
+        c->red   = ((p >> 16) & 0xFF) / 255.0f;
+        c->green = ((p >> 8)  & 0xFF) / 255.0f;
+        c->blue  = ((p >> 0)  & 0xFF) / 255.0f;
+    }
+
+    double counter_time_elapsed(const LARGE_INTEGER &a, const LARGE_INTEGER &b) noexcept {
+        static LARGE_INTEGER freq{};
+        if(freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+        return double(b.QuadPart - a.QuadPart) / freq.QuadPart;
+    }
+
+    double counter_time_elapsed(const LARGE_INTEGER &a) noexcept {
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+        return counter_time_elapsed(a, now);
     }
 
 }
