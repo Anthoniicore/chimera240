@@ -18,7 +18,7 @@ namespace Chimera {
             return;
         }
 
-        auto &cam = camera_data;
+        auto &cam = camera_data(); // 👈 CLAVE
 
         float pitch = cam.orientation[0].x;
         float yaw   = cam.orientation[0].y;
@@ -42,7 +42,7 @@ namespace Chimera {
             return;
         }
 
-        auto &cam = camera_data;
+        auto &cam = camera_data(); // 👈 CLAVE
 
         cam.orientation[0].x = last_pitch;
         cam.orientation[0].y = last_yaw;
@@ -60,3 +60,4 @@ namespace Chimera {
     }
 
 }
+
