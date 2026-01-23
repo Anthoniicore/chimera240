@@ -8,7 +8,7 @@ namespace Chimera {
     static float last_pitch = 0.0f;
     static float last_yaw   = 0.0f;
 
-    static constexpr float BLUR_STRENGTH = 0.30f;
+    static constexpr float BLUR_STRENGTH = 0.70f;
 
     /**
      * This is called automatically by Chimera every frame
@@ -28,6 +28,7 @@ namespace Chimera {
         last_yaw   = yaw;
     }
 }
+
 
 
 
