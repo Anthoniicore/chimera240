@@ -7,8 +7,8 @@
 
 namespace Chimera {
 
-    static float last_yaw   = 0.0f; // y
     static float last_pitch = 0.0f; // x
+    static float last_yaw   = 0.0f; // y
     static bool  has_last   = false;
 
     constexpr float BLUR_STRENGTH = 0.35f;
@@ -18,23 +18,26 @@ namespace Chimera {
             return;
         }
 
-        auto &cam = get_first_person_camera();
+        auto *cam = get_camera();
+        if(!cam) {
+            return;
+        }
 
-        float current_pitch = cam.orientation[0].x;
-        float current_yaw   = cam.orientation[0].y;
+        float pitch = cam->orientation[0].x;
+        float yaw   = cam->orientation[0].y;
 
         if(!has_last) {
-            last_pitch = current_pitch;
-            last_yaw   = current_yaw;
+            last_pitch = pitch;
+            last_yaw   = yaw;
             has_last   = true;
             return;
         }
 
-        float pitch_delta = current_pitch - last_pitch;
-        float yaw_delta   = current_yaw   - last_yaw;
+        float pitch_delta = pitch - last_pitch;
+        float yaw_delta   = yaw   - last_yaw;
 
-        cam.orientation[0].x = current_pitch - pitch_delta * BLUR_STRENGTH;
-        cam.orientation[0].y = current_yaw   - yaw_delta   * BLUR_STRENGTH;
+        cam->orientation[0].x = pitch - pitch_delta * BLUR_STRENGTH;
+        cam->orientation[0].y = yaw   - yaw_delta   * BLUR_STRENGTH;
     }
 
     void fp_motion_blur_after() noexcept {
@@ -42,13 +45,16 @@ namespace Chimera {
             return;
         }
 
-        auto &cam = get_first_person_camera();
+        auto *cam = get_camera();
+        if(!cam) {
+            return;
+        }
 
-        cam.orientation[0].x = last_pitch;
-        cam.orientation[0].y = last_yaw;
+        cam->orientation[0].x = last_pitch;
+        cam->orientation[0].y = last_yaw;
 
-        last_pitch = cam.orientation[0].x;
-        last_yaw   = cam.orientation[0].y;
+        last_pitch = cam->orientation[0].x;
+        last_yaw   = cam->orientation[0].y;
     }
 
     void fp_motion_blur_clear() noexcept {
