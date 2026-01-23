@@ -7,8 +7,9 @@ namespace Chimera {
 
     void fp_motion_blur_before() noexcept;
     void fp_motion_blur_after() noexcept;
-
     void fp_motion_blur_clear() noexcept;
+    void fp_motion_blur_on_tick() noexcept;
+
 }
 
 #endif
