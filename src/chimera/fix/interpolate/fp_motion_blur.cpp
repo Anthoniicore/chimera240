@@ -18,13 +18,10 @@ namespace Chimera {
             return;
         }
 
-        auto *cam = get_camera();
-        if(!cam) {
-            return;
-        }
+        auto &cam = get_camera_data();
 
-        float pitch = cam->orientation[0].x;
-        float yaw   = cam->orientation[0].y;
+        float pitch = cam.orientation[0].x;
+        float yaw   = cam.orientation[0].y;
 
         if(!has_last) {
             last_pitch = pitch;
@@ -36,8 +33,8 @@ namespace Chimera {
         float pitch_delta = pitch - last_pitch;
         float yaw_delta   = yaw   - last_yaw;
 
-        cam->orientation[0].x = pitch - pitch_delta * BLUR_STRENGTH;
-        cam->orientation[0].y = yaw   - yaw_delta   * BLUR_STRENGTH;
+        cam.orientation[0].x = pitch - pitch_delta * BLUR_STRENGTH;
+        cam.orientation[0].y = yaw   - yaw_delta   * BLUR_STRENGTH;
     }
 
     void fp_motion_blur_after() noexcept {
@@ -45,16 +42,13 @@ namespace Chimera {
             return;
         }
 
-        auto *cam = get_camera();
-        if(!cam) {
-            return;
-        }
+        auto &cam = get_camera_data();
 
-        cam->orientation[0].x = last_pitch;
-        cam->orientation[0].y = last_yaw;
+        cam.orientation[0].x = last_pitch;
+        cam.orientation[0].y = last_yaw;
 
-        last_pitch = cam->orientation[0].x;
-        last_yaw   = cam->orientation[0].y;
+        last_pitch = cam.orientation[0].x;
+        last_yaw   = cam.orientation[0].y;
     }
 
     void fp_motion_blur_clear() noexcept {
@@ -66,5 +60,4 @@ namespace Chimera {
     }
 
 }
-
 
