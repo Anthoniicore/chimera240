@@ -19,6 +19,7 @@
 #include "object.hpp"
 #include "particle.hpp"
 #include "interpolate.hpp"
+#include "fp_motion_blur.hpp"
 
 namespace Chimera {
 
