@@ -42,7 +42,6 @@ endif()
 # Define the source files
 add_library(chimera STATIC
     ${WINXP_COMPATIBILITY_FILES}
-    src/chimera/fix/interpolate/fp_motion_blur.cpp
     src/chimera/annoyance/auto_get_list.cpp
     src/chimera/annoyance/auto_get_list.S
     src/chimera/annoyance/drm.cpp
