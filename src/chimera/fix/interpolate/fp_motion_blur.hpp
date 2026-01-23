@@ -5,8 +5,9 @@
 
 namespace Chimera {
 
-    void fp_motion_blur_before(CameraData &cam) noexcept;
-    void fp_motion_blur_after(CameraData &cam) noexcept;
+    void fp_motion_blur_before();
+    void fp_motion_blur_after();
     void fp_motion_blur_clear() noexcept;
 
 }
+
