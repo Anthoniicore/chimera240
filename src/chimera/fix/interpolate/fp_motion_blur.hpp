@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#pragma once
 
-#ifndef CHIMERA_FP_MOTION_BLUR_HPP
-#define CHIMERA_FP_MOTION_BLUR_HPP
+#include "../../halo_data/camera.hpp"
 
 namespace Chimera {
 
-    void fp_motion_blur_before() noexcept;
-    void fp_motion_blur_after() noexcept;
+    void fp_motion_blur_before(CameraData &cam) noexcept;
+    void fp_motion_blur_after(CameraData &cam) noexcept;
     void fp_motion_blur_clear() noexcept;
 
 }
-
-#endif
-
