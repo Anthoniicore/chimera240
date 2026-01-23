@@ -1,3 +1,4 @@
+/*
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include "../../halo_data/camera.hpp"
@@ -59,3 +60,37 @@ namespace Chimera {
         initialized = false;
     }
 }
+*/
+// SPDX-License-Identifier: GPL-3.0-only
+
+#include "fp_motion_blur.hpp"
+
+namespace Chimera {
+
+    // Estado interno (placeholder)
+    static bool blur_enabled = true;
+
+    void fp_motion_blur_before() noexcept {
+        if (!blur_enabled) return;
+
+        // ⚠️ Por ahora NO hacemos nada
+        // Aquí luego irá el offset / acumulación visual
+    }
+
+    void fp_motion_blur_after() noexcept {
+        if (!blur_enabled) return;
+
+        // Restaurar estado si se modificó algo
+    }
+
+    void fp_motion_blur_clear() noexcept {
+        // Reset de buffers / estado
+    }
+
+    void fp_motion_blur_on_tick() noexcept {
+        // Llamado una vez por tick
+        // Aquí luego calcularemos velocidad angular
+    }
+
+}
+
