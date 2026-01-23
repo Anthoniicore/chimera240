@@ -19,6 +19,7 @@
 #include "object.hpp"
 #include "particle.hpp"
 #include "interpolate.hpp"
+#include "fp_motion_blur.hpp"
 
 namespace Chimera {
 
@@ -28,7 +29,7 @@ namespace Chimera {
     static float *first_person_camera_tick_rate = nullptr;
     bool interpolation_enabled = false;
 
-    // ===== 240 FPS STABILITY =====
+    // ===== High-FPS stability (240+ FPS) =====
     static float last_interp_progress = 0.0f;
     constexpr float MIN_PROGRESS_DELTA = 0.0001f;
 
@@ -36,7 +37,9 @@ namespace Chimera {
         return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
     }
 
-    // ===== TICK =====
+    // ===============================
+    // TICK (logic step)
+    // ===============================
     static void on_tick() noexcept {
         if(game_paused()) {
             return;
@@ -54,12 +57,14 @@ namespace Chimera {
         last_interp_progress = 0.0f;
 
         float tick_rate = effective_tick_rate();
-        if(*first_person_camera_tick_rate != tick_rate) {
+        if(first_person_camera_tick_rate && *first_person_camera_tick_rate != tick_rate) {
             overwrite(first_person_camera_tick_rate, tick_rate);
         }
     }
 
-    // ===== PRE-FRAME (INTERPOLATION) =====
+    // ===============================
+    // PRE-FRAME (interpolation)
+    // ===============================
     static void on_preframe() noexcept {
         if(game_paused()) {
             return;
@@ -67,14 +72,14 @@ namespace Chimera {
 
         float raw = clamp01(get_tick_progress());
 
-        // Ensure monotonic progress (important at high FPS)
+        // Enforce monotonic progress (important at high FPS)
         if(raw < last_interp_progress) {
             raw = last_interp_progress;
         }
 
         float delta = raw - last_interp_progress;
         if(delta < MIN_PROGRESS_DELTA) {
-            return; // Skip micro-frames to avoid jitter
+            return;
         }
 
         interpolation_tick_progress = raw;
@@ -87,7 +92,9 @@ namespace Chimera {
         interpolate_particle();
     }
 
-    // ===== FRAME END (ROLLBACK) =====
+    // ===============================
+    // FRAME END (rollback)
+    // ===============================
     static void on_frame() noexcept {
         if(game_paused()) {
             return;
@@ -98,6 +105,9 @@ namespace Chimera {
         interpolate_particle_after();
     }
 
+    // ===============================
+    // CLEAR BUFFERS
+    // ===============================
     void clear_buffers() noexcept {
         interpolate_object_clear();
         interpolate_particle_clear();
@@ -105,10 +115,15 @@ namespace Chimera {
         interpolate_flag_clear();
         interpolate_camera_clear();
         interpolate_fp_clear();
+        fp_motion_blur_clear();
     }
 
+    // ===============================
+    // SETUP
+    // ===============================
     void set_up_interpolation() noexcept {
-        static auto *fp_interp_ptr = get_chimera().get_signature("fp_interp_sig").data();
+        static auto *fp_interp_ptr =
+            get_chimera().get_signature("fp_interp_sig").data();
         static Hook fp_interp_hook;
 
         first_person_camera_tick_rate =
@@ -124,6 +139,11 @@ namespace Chimera {
         add_precamera_event(interpolate_camera_before);
         add_camera_event(interpolate_camera_after);
 
+        // First-person motion blur (visual only)
+        add_precamera_event(fp_motion_blur_before);
+        add_camera_event(fp_motion_blur_after);
+
+        // Hook first-person interpolation
         write_jmp_call(
             fp_interp_ptr,
             fp_interp_hook,
@@ -142,6 +162,9 @@ namespace Chimera {
         interpolation_enabled = true;
     }
 
+    // ===============================
+    // DISABLE
+    // ===============================
     void disable_interpolation() noexcept {
         get_chimera().get_signature("fp_interp_sig").rollback();
         get_chimera().get_signature("camera_interpolation_sig").rollback();
@@ -153,9 +176,11 @@ namespace Chimera {
         remove_precamera_event(interpolate_camera_before);
         remove_camera_event(interpolate_camera_after);
 
+        remove_precamera_event(fp_motion_blur_before);
+        remove_camera_event(fp_motion_blur_after);
+
         remove_revert_event(clear_buffers);
 
         interpolation_enabled = false;
     }
 }
-
