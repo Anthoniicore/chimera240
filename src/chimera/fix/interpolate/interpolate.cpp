@@ -21,7 +21,6 @@
 #include "interpolate.hpp"
 
 namespace Chimera {
-
     // Alpha [0..1] since last tick
     float interpolation_tick_progress = 0.0f;
 
@@ -161,15 +160,15 @@ namespace Chimera {
         interpolation_enabled = false;
     }
     void interpolate_cubic(
-        const Vec3 &p0,
-        const Vec3 &p1,
-        const Vec3 &p2,
-        const Vec3 &p3,
-        Vec3 &out,
+        const Point3D &p0,
+        const Point3D &p1,
+        const Point3D &p2,
+        const Point3D &p3,
+        Point3D &out,
         float t
     ) noexcept {
-        float t2 = t * t;
-        float t3 = t2 * t;
+        const float t2 = t * t;
+        const float t3 = t2 * t;
 
         out.x =
             0.5f * (
