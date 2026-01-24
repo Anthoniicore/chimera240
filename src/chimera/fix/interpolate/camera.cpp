@@ -22,7 +22,7 @@ namespace Chimera {
         CameraData data;
     };
 
-    // Buffers para Catmull-Rom cúbica
+    // 3 buffers para Catmull-Rom
     static InterpolatedCamera camera_buffers[3];
 
     static InterpolatedCamera *prev2_tick   = camera_buffers + 0;
@@ -35,7 +35,7 @@ namespace Chimera {
 
     extern bool spectate_enabled;
 
-    // FPS safety
+    // High-FPS safety
     static float last_alpha = 0.0f;
     constexpr float MIN_ALPHA_DELTA = 0.0001f;
 
@@ -118,7 +118,7 @@ namespace Chimera {
             }
         }
 
-        // ===== POSICIÓN (Catmull-Rom cúbica real) =====
+        // ===== POSICIÓN (Catmull-Rom por componente) =====
         data.position.x = interpolate_cubic(
             prev2_tick->data.position.x,
             prev1_tick->data.position.x,
@@ -143,26 +143,36 @@ namespace Chimera {
             alpha
         );
 
-        // ===== ORIENTACIÓN =====
+        // ===== ORIENTACIÓN (POR COMPONENTE, NO VECTOR) =====
         if(type != CameraType::CAMERA_FIRST_PERSON ||
            vehicle_first_person ||
            spectate_enabled) {
 
-            data.orientation[0] = interpolate_cubic(
-                prev2_tick->data.orientation[0],
-                prev1_tick->data.orientation[0],
-                current_tick->data.orientation[0],
-                current_tick->data.orientation[0],
-                alpha
-            );
+            for(int i = 0; i < 2; i++) {
+                data.orientation[i].x = interpolate_cubic(
+                    prev2_tick->data.orientation[i].x,
+                    prev1_tick->data.orientation[i].x,
+                    current_tick->data.orientation[i].x,
+                    current_tick->data.orientation[i].x,
+                    alpha
+                );
 
-            data.orientation[1] = interpolate_cubic(
-                prev2_tick->data.orientation[1],
-                prev1_tick->data.orientation[1],
-                current_tick->data.orientation[1],
-                current_tick->data.orientation[1],
-                alpha
-            );
+                data.orientation[i].y = interpolate_cubic(
+                    prev2_tick->data.orientation[i].y,
+                    prev1_tick->data.orientation[i].y,
+                    current_tick->data.orientation[i].y,
+                    current_tick->data.orientation[i].y,
+                    alpha
+                );
+
+                data.orientation[i].z = interpolate_cubic(
+                    prev2_tick->data.orientation[i].z,
+                    prev1_tick->data.orientation[i].z,
+                    current_tick->data.orientation[i].z,
+                    current_tick->data.orientation[i].z,
+                    alpha
+                );
+            }
 
             rollback = true;
         }
