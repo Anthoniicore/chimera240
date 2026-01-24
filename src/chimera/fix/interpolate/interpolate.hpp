@@ -16,7 +16,7 @@ namespace Chimera {
     void set_up_interpolation() noexcept;
     void disable_interpolation() noexcept;
 
-|   void interpolate_cubic(
+    void interpolate_cubic(
         const Vec3 &p0,
         const Vec3 &p1,
         const Vec3 &p2,
