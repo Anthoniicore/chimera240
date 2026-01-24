@@ -21,6 +21,7 @@
 #include "interpolate.hpp"
 
 namespace Chimera {
+
     // Alpha [0..1] since last tick
     float interpolation_tick_progress = 0.0f;
 
@@ -36,12 +37,33 @@ namespace Chimera {
     }
 
     // Smooth cubic easing (Hermite)
-    // MCC-like but slightly smoother
+    // Slightly smoother than MCC
     static inline float smoothstep(float t) noexcept {
         return t * t * (3.0f - 2.0f * t);
     }
 
-    // ===== TICK =====
+    // ======================================================
+    // Catmull-Rom cubic interpolation (SCALAR)
+    // ======================================================
+    float interpolate_cubic(
+        float p0,
+        float p1,
+        float p2,
+        float p3,
+        float t
+    ) noexcept {
+        const float t2 = t * t;
+        const float t3 = t2 * t;
+
+        return 0.5f * (
+            (2.0f * p1) +
+            (-p0 + p2) * t +
+            (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+            (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3
+        );
+    }
+
+    // ================= TICK =================
     static void on_tick() noexcept {
         if(game_paused()) {
             return;
@@ -64,7 +86,7 @@ namespace Chimera {
         }
     }
 
-    // ===== PRE-FRAME (INTERPOLATION) =====
+    // ============== PRE-FRAME =================
     static void on_preframe() noexcept {
         if(game_paused()) {
             return;
@@ -72,19 +94,19 @@ namespace Chimera {
 
         float raw = clamp01(get_tick_progress());
 
-        // Ensure monotonic progress (critical at high FPS)
+        // Monotonic progression (very important at 300+ FPS)
         if(raw < last_interp_progress) {
             raw = last_interp_progress;
         }
 
         float delta = raw - last_interp_progress;
         if(delta < MIN_PROGRESS_DELTA) {
-            return; // skip insignificant frames (prevents jitter)
+            return;
         }
 
         last_interp_progress = raw;
 
-        // Apply smooth cubic easing ONLY for rendering
+        // Apply easing ONLY for rendering
         interpolation_tick_progress = smoothstep(raw);
 
         interpolate_antenna_before();
@@ -94,7 +116,7 @@ namespace Chimera {
         interpolate_particle();
     }
 
-    // ===== FRAME END (ROLLBACK) =====
+    // ================= FRAME END =================
     static void on_frame() noexcept {
         if(game_paused()) {
             return;
@@ -115,7 +137,9 @@ namespace Chimera {
     }
 
     void set_up_interpolation() noexcept {
-        static auto *fp_interp_ptr = get_chimera().get_signature("fp_interp_sig").data();
+        static auto *fp_interp_ptr =
+            get_chimera().get_signature("fp_interp_sig").data();
+
         static Hook fp_interp_hook;
 
         first_person_camera_tick_rate =
@@ -159,40 +183,4 @@ namespace Chimera {
 
         interpolation_enabled = false;
     }
-    void interpolate_cubic(
-        const Point3D &p0,
-        const Point3D &p1,
-        const Point3D &p2,
-        const Point3D &p3,
-        Point3D &out,
-        float t
-    ) noexcept {
-        const float t2 = t * t;
-        const float t3 = t2 * t;
-
-        out.x =
-            0.5f * (
-                (2.0f * p1.x) +
-                (-p0.x + p2.x) * t +
-                (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * t2 +
-                (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * t3
-            );
-
-        out.y =
-            0.5f * (
-                (2.0f * p1.y) +
-                (-p0.y + p2.y) * t +
-                (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * t2 +
-                (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * t3
-            );
-
-        out.z =
-            0.5f * (
-                (2.0f * p1.z) +
-                (-p0.z + p2.z) * t +
-                (2.0f * p0.z - 5.0f * p1.z + 4.0f * p2.z - p3.z) * t2 +
-                (-p0.z + 3.0f * p1.z - 3.0f * p2.z + p3.z) * t3
-            );
-    }
 }
-
