@@ -22,11 +22,11 @@ namespace Chimera {
         CameraData data;
     };
 
-    // Necesitamos 3 buffers para cúbica
+    // Buffers para Catmull-Rom cúbica
     static InterpolatedCamera camera_buffers[3];
 
-    static InterpolatedCamera *prev2_tick  = camera_buffers + 0;
-    static InterpolatedCamera *prev1_tick  = camera_buffers + 1;
+    static InterpolatedCamera *prev2_tick   = camera_buffers + 0;
+    static InterpolatedCamera *prev1_tick   = camera_buffers + 1;
     static InterpolatedCamera *current_tick = camera_buffers + 2;
 
     static bool tick_passed = false;
@@ -57,7 +57,6 @@ namespace Chimera {
         auto type = camera_type();
 
         if(tick_passed) {
-            // rotar buffers
             std::swap(prev2_tick, prev1_tick);
             std::swap(prev1_tick, current_tick);
 
@@ -119,13 +118,28 @@ namespace Chimera {
             }
         }
 
-        // ===== POSICIÓN (CÚBICA) =====
-        interpolate_cubic(
-            prev2_tick->data.position,
-            prev1_tick->data.position,
-            current_tick->data.position,
-            current_tick->data.position, // fallback estable
-            data.position,
+        // ===== POSICIÓN (Catmull-Rom cúbica real) =====
+        data.position.x = interpolate_cubic(
+            prev2_tick->data.position.x,
+            prev1_tick->data.position.x,
+            current_tick->data.position.x,
+            current_tick->data.position.x,
+            alpha
+        );
+
+        data.position.y = interpolate_cubic(
+            prev2_tick->data.position.y,
+            prev1_tick->data.position.y,
+            current_tick->data.position.y,
+            current_tick->data.position.y,
+            alpha
+        );
+
+        data.position.z = interpolate_cubic(
+            prev2_tick->data.position.z,
+            prev1_tick->data.position.z,
+            current_tick->data.position.z,
+            current_tick->data.position.z,
             alpha
         );
 
@@ -134,21 +148,19 @@ namespace Chimera {
            vehicle_first_person ||
            spectate_enabled) {
 
-            interpolate_cubic(
+            data.orientation[0] = interpolate_cubic(
                 prev2_tick->data.orientation[0],
                 prev1_tick->data.orientation[0],
                 current_tick->data.orientation[0],
                 current_tick->data.orientation[0],
-                data.orientation[0],
                 alpha
             );
 
-            interpolate_cubic(
+            data.orientation[1] = interpolate_cubic(
                 prev2_tick->data.orientation[1],
                 prev1_tick->data.orientation[1],
                 current_tick->data.orientation[1],
                 current_tick->data.orientation[1],
-                data.orientation[1],
                 alpha
             );
 
