@@ -22,13 +22,11 @@
 
 namespace Chimera {
 
-    // Alpha [0..1] since last tick
     float interpolation_tick_progress = 0.0f;
 
     static float *first_person_camera_tick_rate = nullptr;
     bool interpolation_enabled = false;
 
-    // ---- High FPS stability ----
     static float last_interp_progress = 0.0f;
     constexpr float MIN_PROGRESS_DELTA = 0.0001f;
 
@@ -36,34 +34,11 @@ namespace Chimera {
         return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
     }
 
-    // Smooth cubic easing (Hermite)
-    // Slightly smoother than MCC
     static inline float smoothstep(float t) noexcept {
         return t * t * (3.0f - 2.0f * t);
     }
 
-    // ======================================================
-    // Catmull-Rom cubic interpolation (SCALAR)
-    // ======================================================
-    float interpolate_cubic(
-        float p0,
-        float p1,
-        float p2,
-        float p3,
-        float t
-    ) noexcept {
-        const float t2 = t * t;
-        const float t3 = t2 * t;
-
-        return 0.5f * (
-            (2.0f * p1) +
-            (-p0 + p2) * t +
-            (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
-            (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3
-        );
-    }
-
-    // ================= TICK =================
+    // ===== TICK =====
     static void on_tick() noexcept {
         if(game_paused()) {
             return;
@@ -86,7 +61,7 @@ namespace Chimera {
         }
     }
 
-    // ============== PRE-FRAME =================
+    // ===== PRE-FRAME =====
     static void on_preframe() noexcept {
         if(game_paused()) {
             return;
@@ -94,7 +69,6 @@ namespace Chimera {
 
         float raw = clamp01(get_tick_progress());
 
-        // Monotonic progression (very important at 300+ FPS)
         if(raw < last_interp_progress) {
             raw = last_interp_progress;
         }
@@ -105,8 +79,6 @@ namespace Chimera {
         }
 
         last_interp_progress = raw;
-
-        // Apply easing ONLY for rendering
         interpolation_tick_progress = smoothstep(raw);
 
         interpolate_antenna_before();
@@ -116,7 +88,7 @@ namespace Chimera {
         interpolate_particle();
     }
 
-    // ================= FRAME END =================
+    // ===== FRAME END =====
     static void on_frame() noexcept {
         if(game_paused()) {
             return;
@@ -139,7 +111,6 @@ namespace Chimera {
     void set_up_interpolation() noexcept {
         static auto *fp_interp_ptr =
             get_chimera().get_signature("fp_interp_sig").data();
-
         static Hook fp_interp_hook;
 
         first_person_camera_tick_rate =
@@ -160,7 +131,6 @@ namespace Chimera {
             reinterpret_cast<const void *>(interpolate_fp_after)
         );
 
-        // Disable Halo built-in FP interpolation
         overwrite(
             get_chimera().get_signature("camera_interpolation_sig").data() + 0xF,
             static_cast<unsigned char>(0xEB)
