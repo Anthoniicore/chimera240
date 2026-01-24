@@ -22,10 +22,12 @@ namespace Chimera {
         CameraData data;
     };
 
-    static InterpolatedCamera camera_buffers[2];
+    // Necesitamos 3 buffers para cúbica
+    static InterpolatedCamera camera_buffers[3];
 
-    static InterpolatedCamera *current_tick  = camera_buffers + 0;
-    static InterpolatedCamera *previous_tick = camera_buffers + 1;
+    static InterpolatedCamera *prev2_tick  = camera_buffers + 0;
+    static InterpolatedCamera *prev1_tick  = camera_buffers + 1;
+    static InterpolatedCamera *current_tick = camera_buffers + 2;
 
     static bool tick_passed = false;
     static bool skip = false;
@@ -33,14 +35,12 @@ namespace Chimera {
 
     extern bool spectate_enabled;
 
-    // 240 FPS safety
+    // FPS safety
     static float last_alpha = 0.0f;
     constexpr float MIN_ALPHA_DELTA = 0.0001f;
 
     static inline float clamp01(float v) noexcept {
-        if(v < 0.0f) return 0.0f;
-        if(v > 1.0f) return 1.0f;
-        return v;
+        return std::max(0.0f, std::min(1.0f, v));
     }
 
     void interpolate_camera_before() noexcept {
@@ -49,9 +49,7 @@ namespace Chimera {
         }
 
         float alpha = clamp01(interpolation_tick_progress);
-
-        float delta = alpha - last_alpha;
-        if(delta <= MIN_ALPHA_DELTA) {
+        if(alpha - last_alpha <= MIN_ALPHA_DELTA) {
             return;
         }
         last_alpha = alpha;
@@ -59,7 +57,9 @@ namespace Chimera {
         auto type = camera_type();
 
         if(tick_passed) {
-            std::swap(current_tick, previous_tick);
+            // rotar buffers
+            std::swap(prev2_tick, prev1_tick);
+            std::swap(prev1_tick, current_tick);
 
             static auto **followed_object =
                 reinterpret_cast<ObjectID **>(
@@ -76,13 +76,13 @@ namespace Chimera {
             skip =
                 (type == CameraType::CAMERA_CINEMATIC &&
                  current_tick->followed_object.is_null()) ||
-                (current_tick->followed_object != previous_tick->followed_object ||
-                 current_tick->type != previous_tick->type);
+                (current_tick->followed_object != prev1_tick->followed_object ||
+                 current_tick->type != prev1_tick->type);
 
             if(!skip && type == CameraType::CAMERA_FIRST_PERSON) {
                 skip =
                     distance_squared(
-                        previous_tick->data.position,
+                        prev1_tick->data.position,
                         current_tick->data.position
                     ) > 25.0f;
             }
@@ -115,41 +115,38 @@ namespace Chimera {
                         skip = true;
                         return;
                     }
-
-                    if(type == CameraType::CAMERA_FIRST_PERSON &&
-                       !vehicle_first_person &&
-                       distance_squared(
-                           previous_tick->data.position,
-                           current_tick->data.position
-                       ) > 0.25f &&
-                       magnitude_squared(object->velocity) <= 0.25f) {
-                        skip = true;
-                        return;
-                    }
                 }
             }
         }
 
-        interpolate_point(
-            previous_tick->data.position,
+        // ===== POSICIÓN (CÚBICA) =====
+        interpolate_cubic(
+            prev2_tick->data.position,
+            prev1_tick->data.position,
             current_tick->data.position,
+            current_tick->data.position, // fallback estable
             data.position,
             alpha
         );
 
+        // ===== ORIENTACIÓN =====
         if(type != CameraType::CAMERA_FIRST_PERSON ||
            vehicle_first_person ||
            spectate_enabled) {
 
-            interpolate_point(
-                previous_tick->data.orientation[0],
+            interpolate_cubic(
+                prev2_tick->data.orientation[0],
+                prev1_tick->data.orientation[0],
+                current_tick->data.orientation[0],
                 current_tick->data.orientation[0],
                 data.orientation[0],
                 alpha
             );
 
-            interpolate_point(
-                previous_tick->data.orientation[1],
+            interpolate_cubic(
+                prev2_tick->data.orientation[1],
+                prev1_tick->data.orientation[1],
+                current_tick->data.orientation[1],
                 current_tick->data.orientation[1],
                 data.orientation[1],
                 alpha
@@ -170,7 +167,7 @@ namespace Chimera {
         if(rollback) {
             std::copy(
                 current_tick->data.orientation,
-                current_tick->data.orientation + 1,
+                current_tick->data.orientation + 2,
                 data.orientation
             );
             rollback = false;
