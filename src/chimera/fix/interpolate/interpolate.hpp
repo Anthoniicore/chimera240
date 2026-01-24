@@ -4,8 +4,6 @@
 #define CHIMERA_INTERPOLATE_HPP
 
 namespace Chimera {
-
-    struct Vec3;
     // Interpolation progress between ticks (0.0 → 1.0)
     // Updated every frame
     extern float interpolation_tick_progress;
@@ -17,14 +15,15 @@ namespace Chimera {
     void set_up_interpolation() noexcept;
     void disable_interpolation() noexcept;
 
+    struct Point3D;
+
     void interpolate_cubic(
-        const Vec3 &p0,
-        const Vec3 &p1,
-        const Vec3 &p2,
-        const Vec3 &p3,
-        Vec3 &out,
+        const Point3D &p0,
+        const Point3D &p1,
+        const Point3D &p2,
+        const Point3D &p3,
+        Point3D &out,
         float t
     ) noexcept;
-}
 
 #endif
