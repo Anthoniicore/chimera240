@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "../../halo_data/math.hpp"
 
 #ifndef CHIMERA_INTERPOLATE_HPP
 #define CHIMERA_INTERPOLATE_HPP
 
 namespace Chimera {
 
+    struct Vec3;
     // Interpolation progress between ticks (0.0 → 1.0)
     // Updated every frame
     extern float interpolation_tick_progress;
