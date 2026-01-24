@@ -28,12 +28,18 @@ namespace Chimera {
     static float *first_person_camera_tick_rate = nullptr;
     bool interpolation_enabled = false;
 
-    // ---- 240 FPS STABILITY ----
+    // ---- High FPS stability ----
     static float last_interp_progress = 0.0f;
     constexpr float MIN_PROGRESS_DELTA = 0.0001f;
 
     static inline float clamp01(float v) noexcept {
         return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+    }
+
+    // Smooth cubic easing (Hermite)
+    // MCC-like but slightly smoother
+    static inline float smoothstep(float t) noexcept {
+        return t * t * (3.0f - 2.0f * t);
     }
 
     // ===== TICK =====
@@ -77,8 +83,10 @@ namespace Chimera {
             return; // skip insignificant frames (prevents jitter)
         }
 
-        interpolation_tick_progress = raw;
         last_interp_progress = raw;
+
+        // Apply smooth cubic easing ONLY for rendering
+        interpolation_tick_progress = smoothstep(raw);
 
         interpolate_antenna_before();
         interpolate_flag_before();
@@ -153,3 +161,4 @@ namespace Chimera {
         interpolation_enabled = false;
     }
 }
+
