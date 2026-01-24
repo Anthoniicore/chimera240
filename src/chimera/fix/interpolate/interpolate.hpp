@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#include "../../halo_data/math.hpp"
 
 #ifndef CHIMERA_INTERPOLATE_HPP
 #define CHIMERA_INTERPOLATE_HPP
