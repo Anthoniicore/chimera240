@@ -2,285 +2,264 @@
 
 #include "../../signature/signature.hpp"
 #include "../../halo_data/object.hpp"
+#include "../../halo_data/camera.hpp"
 #include "../../math_trig/math_trig.hpp"
 #include "../../chimera.hpp"
 
 #include "interpolate.hpp"
-
 #include "object.hpp"
 
 namespace Chimera {
-    #define OBJECT_BUFFER_SIZE 2048
-    struct InterpolatedObject {
-        /** Interpolate this object. */
-        bool interpolate = false;
 
-        /** This object was interpolated and needs to be uninterpolated. This is so we don't need to do so many checks twice. */
+#define OBJECT_BUFFER_SIZE 2048
+
+    struct InterpolatedObject {
+        bool interpolate = false;
         bool interpolated_this_frame = false;
 
-        /** This is the number of objects parented to this object. */
         std::size_t children_count = 0;
-
-        /** These are the children that parent this object. */
         std::size_t children[OBJECT_BUFFER_SIZE];
 
-        /** Tag ID of the object. */
         TagID tag_id;
-
-        /** Object index ID. */
         std::uint16_t index;
 
-        /** This is the position of the object's center. */
         Point3D center;
 
-        /** This is the number of nodes this object has. */
         std::size_t node_count;
-
-        /** These are the model nodes used by the object. */
         ModelNode nodes[MAX_NODES];
 
-        //** For device machines. */
-        float device_position = 0.0;
+        float device_position = 0.0f;
     };
 
-    // This is the object data to interpolate.
     static InterpolatedObject object_buffers[2][OBJECT_BUFFER_SIZE] = {};
-
-    // These are pointers to each buffer. These swap every tick.
-    static auto *current_tick = object_buffers[0];
+    static auto *current_tick  = object_buffers[0];
     static auto *previous_tick = object_buffers[1];
 
-    // If true, a tick has passed and it's time to re-copy the FP data.
     static bool tick_passed = false;
 
     static void copy_objects() noexcept;
     static void interpolate_object(std::size_t);
 
-    void interpolate_object_before() noexcept {
-        // Check if a tick has passed. If so, swap buffers and copy new objects.
-        if(tick_passed) {
-            if(current_tick == object_buffers[0]) {
-                current_tick = object_buffers[1];
-                previous_tick = object_buffers[0];
-            }
-            else {
-                current_tick = object_buffers[0];
-                previous_tick = object_buffers[1];
-            }
+    // ------------------------------------------------------------
 
+    void interpolate_object_before() noexcept {
+        if(tick_passed) {
+            std::swap(current_tick, previous_tick);
             copy_objects();
             tick_passed = false;
         }
 
-        static auto **visible_object_count = reinterpret_cast<std::uint32_t **>(get_chimera().get_signature("visible_object_count_sig").data() + 3);
-        static auto **visible_object_array = reinterpret_cast<ObjectID **>(get_chimera().get_signature("visible_object_ptr_sig").data() + 3);
-        auto current_count = **visible_object_count;
+        static auto **visible_object_count =
+            reinterpret_cast<std::uint32_t **>(
+                get_chimera().get_signature("visible_object_count_sig").data() + 3);
 
-        for(std::size_t i = 0; i < current_count; i++) {
+        static auto **visible_object_array =
+            reinterpret_cast<ObjectID **>(
+                get_chimera().get_signature("visible_object_ptr_sig").data() + 3);
+
+        auto count = **visible_object_count;
+
+        for(std::size_t i = 0; i < count; i++) {
             interpolate_object((*visible_object_array)[i].index.index);
         }
     }
 
+    // ------------------------------------------------------------
+
     static void interpolate_object(std::size_t index) {
         extern float interpolation_tick_progress;
 
-        // Don't interpolate out-of-bounds indices
-        if(index >= OBJECT_BUFFER_SIZE) {
+        if(index >= OBJECT_BUFFER_SIZE) return;
+
+        auto &cur  = current_tick[index];
+        auto &prev = previous_tick[index];
+
+        if(!cur.interpolate || cur.interpolated_this_frame) return;
+
+        auto *object =
+            ObjectTable::get_object_table().get_dynamic_object(index);
+
+        if(!object) return;
+
+        if(cur.tag_id != object->tag_id ||
+           prev.tag_id != cur.tag_id ||
+           cur.index != prev.index)
+            return;
+
+        // ---- micro-correction killer (CRÍTICO)
+        if(distance_squared(prev.center, cur.center) < 0.0005f) {
             return;
         }
 
-        auto &current_tick_object = current_tick[index];
-        auto &previous_tick_object = previous_tick[index];
+        cur.interpolated_this_frame = true;
 
-        // Skip objects we can't interpolate or were already interpolated.
-        if(!current_tick_object.interpolate || current_tick_object.interpolated_this_frame) {
+        // ---- children first
+        for(std::size_t i = 0; i < cur.children_count; i++) {
+            interpolate_object(cur.children[i]);
+        }
+
+        // ---- camera distance scaling
+        Point3D cam = camera_data().position;
+        float dist2 = distance_squared(cam, cur.center);
+
+        float alpha = interpolation_tick_progress;
+        if(dist2 < 4.0f) {
+            // cerca = lineal pura
+            alpha = clamp01(alpha);
+        }
+
+        // ---- center interpolation (SIEMPRE)
+        interpolate_point(prev.center, cur.center,
+                          object->center_position, alpha);
+
+        // ---- bipeds remotos: NO skeleton
+        bool is_remote_biped =
+            object->type == OBJECT_TYPE_BIPED &&
+            !object->is_local_player;
+
+        if(is_remote_biped) {
             return;
         }
 
-        auto *object = ObjectTable::get_object_table().get_dynamic_object(index);
-
-        // If for some reason the object ID is invalid, skip that too.
-        if(!object) {
+        // ---- no parented physics jitter
+        if(!object->parent.is_null() &&
+           object->type == OBJECT_TYPE_BIPED) {
             return;
         }
-
-        // Skip if the tags do not match
-        auto &tag_id = object->tag_id;
-        if(tag_id != current_tick_object.tag_id || previous_tick_object.tag_id != tag_id) {
-            return;
-        }
-
-        // Skip if object index ID's don't match
-        if(current_tick_object.index != previous_tick_object.index) {
-            return;
-        }
-
-        // Skip if the node counts don't match
-        if(previous_tick_object.node_count != current_tick_object.node_count) {
-            return;
-        }
-
-        // Set this flag so we don't need to do all these checks again when rolling things back.
-        current_tick_object.interpolated_this_frame = true;
-
-        // Search for all objects that parent this object.
-        for(std::size_t i = 0; i < current_tick_object.children_count; i++) {
-            interpolate_object(current_tick_object.children[i]);
-        }
-
-        // Interpolate the center thingymajigabobit.
-        interpolate_point(previous_tick_object.center, current_tick_object.center, object->center_position, interpolation_tick_progress);
 
         auto *nodes = object->nodes();
+        if(!nodes) return;
 
-        for(std::size_t n = 0; n < current_tick_object.node_count; n++) {
-            auto &node = nodes[n];
-            auto &node_current = current_tick_object.nodes[n];
-            auto &node_before = previous_tick_object.nodes[n];
+        for(std::size_t n = 0; n < cur.node_count; n++) {
+            auto &node_cur  = cur.nodes[n];
+            auto &node_prev = prev.nodes[n];
+            auto &node      = nodes[n];
 
-            // Interpolate position
-            interpolate_point(node_before.position, node_current.position, node.position, interpolation_tick_progress);
+            interpolate_point(
+                node_prev.position,
+                node_cur.position,
+                node.position,
+                alpha
+            );
 
-            // Interpolate scale
-            node.scale = node_before.scale + (node_current.scale - node_before.scale) * interpolation_tick_progress;
+            node.scale =
+                node_prev.scale +
+                (node_cur.scale - node_prev.scale) * alpha;
 
-            // Interpolate it all!
-            Quaternion orientation_current = node_current.rotation;
-            Quaternion orientation_before = node_before.rotation;
-            Quaternion orientation_interpolated;
-            interpolate_quat(orientation_before, orientation_current, orientation_interpolated, interpolation_tick_progress);
-            node.rotation = orientation_interpolated;
+            interpolate_quat(
+                node_prev.rotation,
+                node_cur.rotation,
+                node.rotation,
+                alpha
+            );
         }
     }
 
-    // Copy objects from Halo's data to buffer
+    // ------------------------------------------------------------
+
     static void copy_objects() noexcept {
-        // Get the object table
-        auto &object_table = ObjectTable::get_object_table();
+        auto &table = ObjectTable::get_object_table();
 
-        // Array that holds the parent object ID for each object index (if it has one).
-        ObjectID parent_object_array[OBJECT_BUFFER_SIZE] = {HaloID::null_id()};
+        ObjectID parent_map[OBJECT_BUFFER_SIZE] = { HaloID::null_id() };
 
-        // Go through all objects.
-        auto max_size = object_table.current_size;
         for(std::size_t i = 0; i < OBJECT_BUFFER_SIZE; i++) {
-            auto &current_tick_object = current_tick[i];
-            current_tick_object.interpolated_this_frame = false;
+            auto &obj = current_tick[i];
 
-            // Set this to false so if it doesn't exist or we can't interpolate it for some reason, we don't have to worry about it.
-            current_tick_object.interpolate = false;
+            obj.interpolate = false;
+            obj.interpolated_this_frame = false;
+            obj.children_count = 0;
 
-            // Store index ID.
-            current_tick_object.index = object_table.first_element[i].id;
+            auto *dyn = table.get_dynamic_object(i);
+            if(!dyn) continue;
 
-            // Set this to zero for later.
-            current_tick_object.children_count = 0;
+            obj.index  = table.first_element[i].id;
+            obj.tag_id = dyn->tag_id;
+            obj.center = dyn->center_position;
 
-            // See if the object exists.
-            auto *object = object_table.get_dynamic_object(i);
-            if(!object) {
-                continue;
-            }
+            auto *nodes = dyn->nodes();
+            if(!nodes) continue;
 
-            // Check if the object isn't visible.
-            bool is_weapon = object->type == ObjectType::OBJECT_TYPE_WEAPON;
-            if(object->no_collision && is_weapon) {
-                continue;
-            }
-
-            // Check if we can actually interpolate this object.
-            auto *nodes = object->nodes();
-            if(!nodes) {
-                continue;
-            }
-
-            // Get the number of model nodes.
-            current_tick_object.tag_id = object->tag_id;
-            auto *object_tag = get_tag(current_tick_object.tag_id.index.index);
-            if(!object_tag) {
-                continue;
-            }
-
-            // Get the model tag to get the node count
-            if(object->type == ObjectType::OBJECT_TYPE_PROJECTILE) {
-                current_tick_object.node_count = 1;
+            // ---- node count
+            if(dyn->type == OBJECT_TYPE_PROJECTILE) {
+                obj.node_count = 1;
             }
             else {
-                const auto &model_tag_id = *reinterpret_cast<const TagID *>(object_tag->data + 0x28 + 0xC);
-                auto *model_tag = get_tag(model_tag_id);
-                if(!model_tag) {
-                    current_tick_object.node_count = 0;
-                }
-                else {
-                    current_tick_object.node_count = *reinterpret_cast<std::uint32_t *>(model_tag->data + 0xB8);
+                auto *tag = get_tag(obj.tag_id.index.index);
+                if(!tag) continue;
+
+                auto model_id =
+                    *reinterpret_cast<TagID *>(tag->data + 0x34);
+                auto *model = get_tag(model_id);
+                if(!model) continue;
+
+                obj.node_count =
+                    *reinterpret_cast<std::uint32_t *>(model->data + 0xB8);
+            }
+
+            std::copy(nodes, nodes + obj.node_count, obj.nodes);
+
+            // ---- interpolation distance caps
+            static constexpr float MAX_DIST2_BIPED = 2.5f * 2.5f;
+            static constexpr float MAX_DIST2_OTHER = 7.5f * 7.5f;
+
+            float max_dist2 =
+                dyn->type == OBJECT_TYPE_BIPED
+                ? MAX_DIST2_BIPED
+                : MAX_DIST2_OTHER;
+
+            obj.interpolate =
+                distance_squared(obj.center, previous_tick[i].center)
+                < max_dist2;
+
+            // ---- device machine fix
+            if(dyn->type == OBJECT_TYPE_DEVICE_MACHINE) {
+                obj.device_position =
+                    reinterpret_cast<DeviceMachineDynamicObject *>(dyn)
+                        ->device_position;
+
+                if(obj.interpolate) {
+                    obj.interpolate =
+                        !(obj.device_position < 0.002f &&
+                          previous_tick[i].device_position > 0.9f);
                 }
             }
 
-            // Copy nodes from Halo's data
-            std::copy(nodes, nodes + current_tick_object.node_count, current_tick_object.nodes);
-            current_tick_object.center = object->center_position;
-
-            // Bipeds get a max speed of 2.5 per tick before they aren't interpolated. Other objects get 7.5 world units.
-            static const float MAX_INTERPOLATION_DISTANCES[] = { 7.5*7.5, 2.5*2.5 };
-
-            // Let's check if the distance between the two points is too great (such as if the object was teleported).
-            current_tick_object.interpolate = distance_squared(current_tick_object.center, previous_tick[i].center) < MAX_INTERPOLATION_DISTANCES[object->type == OBJECT_TYPE_BIPED];
-
-            // Bodge the damn beam emitters
-            if(object->type == OBJECT_TYPE_DEVICE_MACHINE) {
-                current_tick_object.device_position = reinterpret_cast<DeviceMachineDynamicObject *>(object)->device_position;
-                if(current_tick_object.interpolate) {
-                    current_tick_object.interpolate = !(current_tick_object.device_position < 0.002 && previous_tick[i].device_position > 0.9);
-                }
-            }
-
-            // If this object is a child object, add the parent to the parent array.
-            if(!object->parent.is_null()) {
-                parent_object_array[i] = object->parent;
+            if(!dyn->parent.is_null()) {
+                parent_map[i] = dyn->parent;
             }
         }
 
-        // Now go through the parent object array to add child objects to their parents children array.
-        for(std::size_t i = 0; i < max_size && i < OBJECT_BUFFER_SIZE; i++) {
-            // If object at index i has no parent, skip.
-            if(parent_object_array[i].is_null()) {
-                continue;
-            }
+        // ---- build parent -> children
+        for(std::size_t i = 0; i < OBJECT_BUFFER_SIZE; i++) {
+            if(parent_map[i].is_null()) continue;
 
-            // If it does have a parent, put the index in the parent objects child array.
-            auto &current_tick_parent_object = current_tick[parent_object_array[i].index.index];
-            current_tick_parent_object.children[current_tick_parent_object.children_count++] = i;
+            auto &parent =
+                current_tick[parent_map[i].index.index];
+
+            parent.children[parent.children_count++] = i;
         }
     }
 
+    // ------------------------------------------------------------
+
     void interpolate_object_after() noexcept {
-        auto &object_table = ObjectTable::get_object_table();
-        auto max_objects = object_table.current_size;
-        for(std::size_t i = 0; i < max_objects && i < OBJECT_BUFFER_SIZE; i++) {
-            auto &current_tick_object = current_tick[i];
+        auto &table = ObjectTable::get_object_table();
 
-            // Skip if we didn't interpolate this frame.
-            if(!current_tick_object.interpolated_this_frame) {
-                continue;
-            }
+        for(std::size_t i = 0; i < table.current_size; i++) {
+            auto &obj = current_tick[i];
+            if(!obj.interpolated_this_frame) continue;
 
-            // Unset so we can interpolate again next frame
-            current_tick_object.interpolated_this_frame = false;
+            obj.interpolated_this_frame = false;
 
-            auto *object = object_table.get_dynamic_object(i);
+            auto *dyn = table.get_dynamic_object(i);
+            if(!dyn) continue;
 
-            // This shouldn't ever happen but just in case it does...
-            if(!object) {
-                continue;
-            }
-
-            object->center_position = current_tick_object.center;
-            std::copy(current_tick_object.nodes, current_tick_object.nodes + current_tick_object.node_count, object->nodes());
+            dyn->center_position = obj.center;
+            std::copy(obj.nodes, obj.nodes + obj.node_count, dyn->nodes());
         }
     }
 
     void interpolate_object_clear() noexcept {
-        // Just make sure we're not going to write garbage data to the game state.
         for(std::size_t i = 0; i < OBJECT_BUFFER_SIZE; i++) {
             current_tick[i].interpolate = false;
             current_tick[i].interpolated_this_frame = false;
