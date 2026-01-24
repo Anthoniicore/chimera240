@@ -15,15 +15,23 @@ namespace Chimera {
     void set_up_interpolation() noexcept;
     void disable_interpolation() noexcept;
 
-    struct Point3D;
-
-    void interpolate_cubic(
-        const Point3D &p0,
-        const Point3D &p1,
-        const Point3D &p2,
-        const Point3D &p3,
-        Point3D &out,
+    inline float interpolate_cubic(
+        float p0,
+        float p1,
+        float p2,
+        float p3,
         float t
-    ) noexcept;
+    ) noexcept {
+        const float t2 = t * t;
+        const float t3 = t2 * t;
 
+        return 0.5f * (
+            (2.0f * p1) +
+            (-p0 + p2) * t +
+            (2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3) * t2 +
+            (-p0 + 3.0f * p1 - 3.0f * p2 + p3) * t3
+        );
+    }
+
+ }
 #endif
