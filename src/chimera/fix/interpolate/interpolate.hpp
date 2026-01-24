@@ -15,6 +15,15 @@ namespace Chimera {
     // Setup / teardown
     void set_up_interpolation() noexcept;
     void disable_interpolation() noexcept;
+
+|   void interpolate_cubic(
+        const Vec3 &p0,
+        const Vec3 &p1,
+        const Vec3 &p2,
+        const Vec3 &p3,
+        Vec3 &out,
+        float t
+    ) noexcept;
 }
 
 #endif
