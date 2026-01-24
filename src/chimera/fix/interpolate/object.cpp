@@ -86,7 +86,7 @@ namespace Chimera {
            cur.index != prev.index)
             return;
 
-        // ---- micro-correction killer (CRÍTICO)
+        // ---- micro-correction killer
         if(distance_squared(prev.center, cur.center) < 0.0005f) {
             return;
         }
@@ -98,32 +98,23 @@ namespace Chimera {
             interpolate_object(cur.children[i]);
         }
 
-        // ---- camera distance scaling
-        Point3D cam = camera_data().position;
-        float dist2 = distance_squared(cam, cur.center);
-
         float alpha = interpolation_tick_progress;
-        if(dist2 < 4.0f) {
-            // cerca = lineal pura
-            alpha = clamp01(alpha);
-        }
 
-        // ---- center interpolation (SIEMPRE)
-        interpolate_point(prev.center, cur.center,
-                          object->center_position, alpha);
+        // ---- always interpolate center
+        interpolate_point(
+            prev.center,
+            cur.center,
+            object->center_position,
+            alpha
+        );
 
-        // ---- bipeds remotos: NO skeleton
-        bool is_remote_biped =
-            object->type == OBJECT_TYPE_BIPED &&
-            !object->is_local_player;
-
-        if(is_remote_biped) {
+        // ---- NEVER interpolate skeleton of bipeds
+        if(object->type == OBJECT_TYPE_BIPED) {
             return;
         }
 
-        // ---- no parented physics jitter
-        if(!object->parent.is_null() &&
-           object->type == OBJECT_TYPE_BIPED) {
+        // ---- avoid parented physics jitter
+        if(!object->parent.is_null()) {
             return;
         }
 
@@ -146,12 +137,14 @@ namespace Chimera {
                 node_prev.scale +
                 (node_cur.scale - node_prev.scale) * alpha;
 
+            Quaternion q;
             interpolate_quat(
                 node_prev.rotation,
                 node_cur.rotation,
-                node.rotation,
+                q,
                 alpha
             );
+            node.rotation = q;
         }
     }
 
@@ -179,7 +172,6 @@ namespace Chimera {
             auto *nodes = dyn->nodes();
             if(!nodes) continue;
 
-            // ---- node count
             if(dyn->type == OBJECT_TYPE_PROJECTILE) {
                 obj.node_count = 1;
             }
@@ -198,7 +190,6 @@ namespace Chimera {
 
             std::copy(nodes, nodes + obj.node_count, obj.nodes);
 
-            // ---- interpolation distance caps
             static constexpr float MAX_DIST2_BIPED = 2.5f * 2.5f;
             static constexpr float MAX_DIST2_OTHER = 7.5f * 7.5f;
 
@@ -211,7 +202,6 @@ namespace Chimera {
                 distance_squared(obj.center, previous_tick[i].center)
                 < max_dist2;
 
-            // ---- device machine fix
             if(dyn->type == OBJECT_TYPE_DEVICE_MACHINE) {
                 obj.device_position =
                     reinterpret_cast<DeviceMachineDynamicObject *>(dyn)
@@ -229,7 +219,6 @@ namespace Chimera {
             }
         }
 
-        // ---- build parent -> children
         for(std::size_t i = 0; i < OBJECT_BUFFER_SIZE; i++) {
             if(parent_map[i].is_null()) continue;
 
