@@ -3,13 +3,16 @@
 #include "../../math_trig/math_trig.hpp"
 
 #include <optional>
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 
 #include "fp.hpp"
 #include "../../halo_data/pause.hpp"
 #include "../../chimera.hpp"
 #include "../../signature/signature.hpp"
+#include "interpolate.hpp"
 
 namespace Chimera {
 
@@ -21,27 +24,31 @@ namespace Chimera {
     static_assert(sizeof(FirstPersonNode) == 0x20);
 
     static std::byte *first_person_nodes() noexcept {
-        static std::optional<std::byte *> base;
+        static std::optional<std::byte *> first_person_nodes_opt;
 
-        if(!base.has_value()) {
-            base =
+        if(!first_person_nodes_opt.has_value()) {
+            first_person_nodes_opt =
                 **reinterpret_cast<std::byte ***>(
-                    get_chimera().get_signature(
-                        "first_person_node_base_address_sig"
-                    ).data() + 2
+                    get_chimera().get_signature("first_person_node_base_address_sig").data() + 2
                 );
         }
 
-        return base.value();
+        return first_person_nodes_opt.value();
     }
 
-    #define NODES_PER_BUFFER 64
+    #define NODES_PER_BUFFER 128
+    static FirstPersonNode fp_buffers[2][NODES_PER_BUFFER] = {};
 
-    static FirstPersonNode last_frame[NODES_PER_BUFFER]{};
-    static bool initialized = false;
+    static FirstPersonNode *current_tick  = fp_buffers[0];
+    static FirstPersonNode *previous_tick = fp_buffers[1];
 
-    // FP smoothing strength (NO tick based)
-    static constexpr float FP_ALPHA = 0.35f;
+    static bool skip = false;
+    static bool revert = false;
+    static bool tick_passed = false;
+
+    // 240 FPS safety
+    static float last_alpha = 0.0f;
+    constexpr float MIN_ALPHA_DELTA = 0.0001f;
 
     static inline float clamp01(float v) noexcept {
         if(v < 0.0f) return 0.0f;
@@ -50,62 +57,84 @@ namespace Chimera {
     }
 
     void interpolate_fp_before() noexcept {
-        if(game_paused() || !interpolation_enabled)
+        if(game_paused() || !interpolation_enabled) {
             return;
+        }
 
         FirstPersonNode *fpn =
             reinterpret_cast<FirstPersonNode *>(first_person_nodes() + 0x8C);
 
-        if(!initialized) {
-            std::memcpy(last_frame, fpn, sizeof(last_frame));
-            initialized = true;
+        float alpha = clamp01(interpolation_tick_progress);
+
+        // Skip meaningless frames (critical at 240 FPS)
+        float delta = alpha - last_alpha;
+        if(delta <= MIN_ALPHA_DELTA) {
             return;
         }
+        last_alpha = alpha;
 
-        float alpha = FP_ALPHA;
+        if(tick_passed) {
+            static std::uint32_t last_weapon = ~0u;
+            static std::uint32_t &current_weapon =
+                *reinterpret_cast<std::uint32_t *>(first_person_nodes() + 8);
 
-        for(std::size_t i = 0; i < NODES_PER_BUFFER; i++) {
-            // Orientation (linear slerp already in interpolate_quat)
-            interpolate_quat(
-                last_frame[i].orientation,
-                fpn[i].orientation,
-                fpn[i].orientation,
-                alpha
-            );
+            skip = !*reinterpret_cast<std::uint32_t *>(first_person_nodes())
+                   || last_weapon != current_weapon;
 
-            // Position (linear, NOT cubic)
-            interpolate_point(
-                last_frame[i].position,
-                fpn[i].position,
-                fpn[i].position,
-                alpha
-            );
+            if(revert) {
+                skip = true;
+                revert = false;
+            }
 
-            // Scale
-            fpn[i].scale =
-                last_frame[i].scale +
-                (fpn[i].scale - last_frame[i].scale) * alpha;
+            std::swap(current_tick, previous_tick);
+
+            last_weapon = current_weapon;
+            tick_passed = false;
+
+            std::copy(fpn, fpn + NODES_PER_BUFFER, current_tick);
+        }
+
+        if(!skip) {
+            for(int i = 0; i < NODES_PER_BUFFER; i++) {
+                interpolate_quat(
+                    previous_tick[i].orientation,
+                    current_tick[i].orientation,
+                    fpn[i].orientation,
+                    alpha
+                );
+
+                interpolate_point(
+                    previous_tick[i].position,
+                    current_tick[i].position,
+                    fpn[i].position,
+                    alpha
+                );
+
+                fpn[i].scale =
+                    previous_tick[i].scale +
+                    (current_tick[i].scale - previous_tick[i].scale) * alpha;
+            }
         }
     }
 
     void interpolate_fp_after() noexcept {
-        if(game_paused() || !interpolation_enabled)
-            return;
+        if(!skip && !game_paused() && interpolation_enabled) {
+            FirstPersonNode *fpn =
+                reinterpret_cast<FirstPersonNode *>(first_person_nodes() + 0x8C);
 
-        FirstPersonNode *fpn =
-            reinterpret_cast<FirstPersonNode *>(first_person_nodes() + 0x8C);
-
-        std::memcpy(last_frame, fpn, sizeof(last_frame));
+            std::copy(current_tick, current_tick + NODES_PER_BUFFER, fpn);
+        }
     }
 
     void interpolate_fp_clear() noexcept {
-        initialized = false;
-        std::memset(last_frame, 0, sizeof(last_frame));
+        skip = true;
+        revert = true;
+        last_alpha = 0.0f;
+        std::memset(fp_buffers, 0, sizeof(fp_buffers));
     }
 
     void interpolate_fp_on_tick() noexcept {
-        // FP does NOT care about ticks
-        // function intentionally empty
+        tick_passed = true;
+        last_alpha = 0.0f;
     }
 }
-
