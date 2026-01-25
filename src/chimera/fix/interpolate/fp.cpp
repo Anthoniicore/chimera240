@@ -40,10 +40,8 @@ namespace Chimera {
     static FirstPersonNode last_frame[NODES_PER_BUFFER]{};
     static bool initialized = false;
 
-    // CONSTANT smoothing (engine-safe)
-    static constexpr float FP_POS_ALPHA   = 0.35f;
-    static constexpr float FP_ROT_ALPHA   = 0.22f;
-    static constexpr float FP_SCALE_ALPHA = 0.30f;
+    // FP smoothing strength (NO tick based)
+    static constexpr float FP_ALPHA = 0.35f;
 
     static inline float clamp01(float v) noexcept {
         if(v < 0.0f) return 0.0f;
@@ -64,28 +62,29 @@ namespace Chimera {
             return;
         }
 
-        for(std::size_t i = 0; i < NODES_PER_BUFFER; i++) {
+        float alpha = FP_ALPHA;
 
-            // Orientation — slightly tighter
+        for(std::size_t i = 0; i < NODES_PER_BUFFER; i++) {
+            // Orientation (linear slerp already in interpolate_quat)
             interpolate_quat(
                 last_frame[i].orientation,
                 fpn[i].orientation,
                 fpn[i].orientation,
-                FP_ROT_ALPHA
+                alpha
             );
 
-            // Position — smoother
+            // Position (linear, NOT cubic)
             interpolate_point(
                 last_frame[i].position,
                 fpn[i].position,
                 fpn[i].position,
-                FP_POS_ALPHA
+                alpha
             );
 
             // Scale
             fpn[i].scale =
                 last_frame[i].scale +
-                (fpn[i].scale - last_frame[i].scale) * FP_SCALE_ALPHA;
+                (fpn[i].scale - last_frame[i].scale) * alpha;
         }
     }
 
@@ -105,6 +104,7 @@ namespace Chimera {
     }
 
     void interpolate_fp_on_tick() noexcept {
-        // FP interpolation is frame-only by design
+        // FP does NOT care about ticks
+        // function intentionally empty
     }
 }
