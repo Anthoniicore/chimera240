@@ -35,7 +35,7 @@ namespace Chimera {
         return base.value();
     }
 
-    #define NODES_PER_BUFFER 256
+    #define NODES_PER_BUFFER 128
 
     static FirstPersonNode last_frame[NODES_PER_BUFFER]{};
     static bool initialized = false;
@@ -108,3 +108,4 @@ namespace Chimera {
         // function intentionally empty
     }
 }
+
