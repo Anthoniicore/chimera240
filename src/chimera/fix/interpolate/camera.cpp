@@ -22,12 +22,10 @@ namespace Chimera {
         CameraData data;
     };
 
-    // 3 buffers para Catmull-Rom
-    static InterpolatedCamera camera_buffers[3];
+    static InterpolatedCamera camera_buffers[2];
 
-    static InterpolatedCamera *prev2_tick   = camera_buffers + 0;
-    static InterpolatedCamera *prev1_tick   = camera_buffers + 1;
-    static InterpolatedCamera *current_tick = camera_buffers + 2;
+    static InterpolatedCamera *current_tick  = camera_buffers + 0;
+    static InterpolatedCamera *previous_tick = camera_buffers + 1;
 
     static bool tick_passed = false;
     static bool skip = false;
@@ -35,12 +33,14 @@ namespace Chimera {
 
     extern bool spectate_enabled;
 
-    // High-FPS safety
+    // 240 FPS safety
     static float last_alpha = 0.0f;
     constexpr float MIN_ALPHA_DELTA = 0.0001f;
 
     static inline float clamp01(float v) noexcept {
-        return std::max(0.0f, std::min(1.0f, v));
+        if(v < 0.0f) return 0.0f;
+        if(v > 1.0f) return 1.0f;
+        return v;
     }
 
     void interpolate_camera_before() noexcept {
@@ -49,7 +49,9 @@ namespace Chimera {
         }
 
         float alpha = clamp01(interpolation_tick_progress);
-        if(alpha - last_alpha <= MIN_ALPHA_DELTA) {
+
+        float delta = alpha - last_alpha;
+        if(delta <= MIN_ALPHA_DELTA) {
             return;
         }
         last_alpha = alpha;
@@ -57,8 +59,7 @@ namespace Chimera {
         auto type = camera_type();
 
         if(tick_passed) {
-            std::swap(prev2_tick, prev1_tick);
-            std::swap(prev1_tick, current_tick);
+            std::swap(current_tick, previous_tick);
 
             static auto **followed_object =
                 reinterpret_cast<ObjectID **>(
@@ -75,13 +76,13 @@ namespace Chimera {
             skip =
                 (type == CameraType::CAMERA_CINEMATIC &&
                  current_tick->followed_object.is_null()) ||
-                (current_tick->followed_object != prev1_tick->followed_object ||
-                 current_tick->type != prev1_tick->type);
+                (current_tick->followed_object != previous_tick->followed_object ||
+                 current_tick->type != previous_tick->type);
 
             if(!skip && type == CameraType::CAMERA_FIRST_PERSON) {
                 skip =
                     distance_squared(
-                        prev1_tick->data.position,
+                        previous_tick->data.position,
                         current_tick->data.position
                     ) > 25.0f;
             }
@@ -114,65 +115,45 @@ namespace Chimera {
                         skip = true;
                         return;
                     }
+
+                    if(type == CameraType::CAMERA_FIRST_PERSON &&
+                       !vehicle_first_person &&
+                       distance_squared(
+                           previous_tick->data.position,
+                           current_tick->data.position
+                       ) > 0.25f &&
+                       magnitude_squared(object->velocity) <= 0.25f) {
+                        skip = true;
+                        return;
+                    }
                 }
             }
         }
 
-        // ===== POSICIÓN (Catmull-Rom por componente) =====
-        data.position.x = interpolate_cubic(
-            prev2_tick->data.position.x,
-            prev1_tick->data.position.x,
-            current_tick->data.position.x,
-            current_tick->data.position.x,
+        interpolate_point(
+            previous_tick->data.position,
+            current_tick->data.position,
+            data.position,
             alpha
         );
 
-        data.position.y = interpolate_cubic(
-            prev2_tick->data.position.y,
-            prev1_tick->data.position.y,
-            current_tick->data.position.y,
-            current_tick->data.position.y,
-            alpha
-        );
-
-        data.position.z = interpolate_cubic(
-            prev2_tick->data.position.z,
-            prev1_tick->data.position.z,
-            current_tick->data.position.z,
-            current_tick->data.position.z,
-            alpha
-        );
-
-        // ===== ORIENTACIÓN (POR COMPONENTE, NO VECTOR) =====
         if(type != CameraType::CAMERA_FIRST_PERSON ||
            vehicle_first_person ||
            spectate_enabled) {
 
-            for(int i = 0; i < 2; i++) {
-                data.orientation[i].x = interpolate_cubic(
-                    prev2_tick->data.orientation[i].x,
-                    prev1_tick->data.orientation[i].x,
-                    current_tick->data.orientation[i].x,
-                    current_tick->data.orientation[i].x,
-                    alpha
-                );
+            interpolate_point(
+                previous_tick->data.orientation[0],
+                current_tick->data.orientation[0],
+                data.orientation[0],
+                alpha
+            );
 
-                data.orientation[i].y = interpolate_cubic(
-                    prev2_tick->data.orientation[i].y,
-                    prev1_tick->data.orientation[i].y,
-                    current_tick->data.orientation[i].y,
-                    current_tick->data.orientation[i].y,
-                    alpha
-                );
-
-                data.orientation[i].z = interpolate_cubic(
-                    prev2_tick->data.orientation[i].z,
-                    prev1_tick->data.orientation[i].z,
-                    current_tick->data.orientation[i].z,
-                    current_tick->data.orientation[i].z,
-                    alpha
-                );
-            }
+            interpolate_point(
+                previous_tick->data.orientation[1],
+                current_tick->data.orientation[1],
+                data.orientation[1],
+                alpha
+            );
 
             rollback = true;
         }
@@ -189,7 +170,7 @@ namespace Chimera {
         if(rollback) {
             std::copy(
                 current_tick->data.orientation,
-                current_tick->data.orientation + 2,
+                current_tick->data.orientation + 1,
                 data.orientation
             );
             rollback = false;
