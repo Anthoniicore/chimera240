@@ -3,7 +3,6 @@
 #ifndef MATH_TRIG_HPP
 #define MATH_TRIG_HPP
 
-#include <windows.h>
 #include <cmath>
 #include <cstdint>
 
