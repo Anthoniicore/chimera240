@@ -2,7 +2,7 @@
 
 #include <d3d9.h>
 
-#include "specular_light_fix.hpp"
+#include "specular_memes.hpp"
 #include "../chimera.hpp"
 #include "../signature/hook.hpp"
 #include "../signature/signature.hpp"
