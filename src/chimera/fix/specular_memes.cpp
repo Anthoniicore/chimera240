@@ -8,6 +8,7 @@
 #include "../signature/signature.hpp"
 #include "../event/game_loop.hpp"
 #include "../rasterizer/rasterizer.hpp"
+#include "../output/output.hpp" // <- necesario para console_output
 
 extern "C" {
     void specular_light_draw_set_texture_asm() noexcept;
@@ -26,7 +27,7 @@ namespace Chimera {
 
     void patch_specular_light_draw() noexcept {
         if (d3d9_device_caps->PixelShaderVersion < 0xffff0200) {
-            output_debug("Specular light fix skipped: Pixel Shader 2.0 not supported.");
+            console_output("Specular light fix skipped: Pixel Shader 2.0 not supported.");
             return;
         }
 
@@ -38,7 +39,9 @@ namespace Chimera {
         write_code_s(tex3_call, nop);
 
         // Redirect texture assignment
-        write_jmp_call(tex1_call, hook_set_texture, reinterpret_cast<const void *>(specular_light_draw_set_texture_asm), nullptr, false);
+        write_jmp_call(tex1_call, hook_set_texture,
+                       reinterpret_cast<const void *>(specular_light_draw_set_texture_asm),
+                       nullptr, false);
 
         // Shader constant fix
         if (get_chimera().feature_present("client_custom_edition")) {
@@ -75,4 +78,3 @@ namespace Chimera {
         patch_specular_lightmap();
     }
 }
-
