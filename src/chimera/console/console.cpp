@@ -27,7 +27,7 @@ namespace Chimera {
     static bool rcon_command_used_recently = false;
     static void read_command();
     static char *console_text = NULL;
-    
+
     using SteadyClock = std::chrono::steady_clock;
     struct Line {
         std::string text;
@@ -72,14 +72,12 @@ namespace Chimera {
     static std::vector<std::unique_ptr<CommandEntry>> new_entries_added;
 
     void script_command_dump_command(int, const char **) noexcept {
-        char path[MAX_PATH];
-
+        std::filesystem::path path;
         if(entries) {
             std::size_t command_entry_count = *entry_count;
             auto *command_entries = *entries;
 
-            std::snprintf(path, sizeof(path), "%sscript_command_dump.json", get_chimera().get_path());
-
+            path = get_chimera().get_path() / "script_command_dump.json";
             std::ofstream o(path, std::ios_base::out | std::ios_base::trunc);
             o << "[\n";
 
@@ -104,11 +102,11 @@ namespace Chimera {
             o.flush();
             o.close();
 
-            console_output("Dumped %zu command%s to %s", command_entry_count, command_entry_count == 1 ? "" : "s", path);
+            console_output("Dumped %zu command%s to script_command_dump.json", command_entry_count, command_entry_count == 1 ? "" : "s");
         }
 
         if(entries_global) {
-            std::snprintf(path, sizeof(path), "%sscript_global_dump.json", get_chimera().get_path());
+            path = get_chimera().get_path() / "script_global_dump.json";
             std::ofstream o(path, std::ios_base::out | std::ios_base::trunc);
             o << "[\n";
 
@@ -152,7 +150,7 @@ namespace Chimera {
             o.flush();
             o.close();
 
-            console_output("Dumped %zu global%s to %s", global_entry_count, global_entry_count == 1 ? "" : "s", path);
+            console_output("Dumped %zu global%s to script_global_dump.json", global_entry_count, global_entry_count == 1 ? "" : "s");
         }
     }
 
@@ -176,7 +174,7 @@ namespace Chimera {
             new_command->more_stuff = 0x15;
             new_entries_list.emplace_back(new_command.get());
         }
-        
+
         auto &clear_command = new_entries_added.emplace_back(std::make_unique<CommandEntry>());
         clear_command->return_type = 4;
         clear_command->name = "clear";
@@ -254,17 +252,11 @@ namespace Chimera {
         if(std::strcmp(console_text, "clear") == 0) {
             std::strcpy(console_text, "cls");
         }
-        
+
         // Clear the text if needed
         if(std::strcmp(console_text, "cls") == 0) {
             position = 0;
             custom_lines.clear();
-            return;
-        }
-
-        // Pls don't kill me
-        if (std::strcmp(console_text, "chimera_reload_scripts") == 0 || std::strcmp(console_text, "rs") == 0) {
-            get_chimera().execute_command("chimera_lua_reload_scripts");
             return;
         }
 

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include "../localization/localization.hpp"
-#include "../version.hpp"
 #include "../command/command.hpp"
 #include "../output/output.hpp"
 #include "../chimera.hpp"
 #include "config.hpp"
+#include "version.hpp"
 
 namespace Chimera {
     const std::vector<std::string> *Config::get_settings_for_command(const char *command) const {
@@ -50,15 +51,18 @@ namespace Chimera {
 
         // Make our line thingy
         static constexpr const std::size_t LEN = 81;
+        static constexpr const std::size_t VERSION_LEN = 50;
         char saved_with_line[LEN];
         std::memset(saved_with_line, ' ', sizeof(saved_with_line));
         char chimera_version[] = "#   Chimera version " CHIMERA_VERSION_STRING;
-        static_assert(sizeof(chimera_version) < LEN / 2, "out-of-bounds for chimera_version size");
+        static_assert(sizeof(chimera_version) < VERSION_LEN, "out-of-bounds for chimera_version size");
         std::memcpy(saved_with_line, chimera_version, sizeof(chimera_version) - 1);
 
         // Randomly select a line
         const char *random_text;
         auto meme = pc.LowPart % 20;
+
+
         if(meme == 9 || meme == 2) {
             random_text = "Chu! Chu! Chu!!!!";
         }
@@ -71,7 +75,8 @@ namespace Chimera {
         else {
             random_text = "by Snowy ^.^";
         }
-        std::snprintf(saved_with_line + LEN/2, sizeof(saved_with_line) - LEN/2, "%36s   #", random_text);
+
+        std::snprintf(saved_with_line + VERSION_LEN, sizeof(saved_with_line) - VERSION_LEN, "%26s   #", random_text);
 
         config << saved_with_line << "\n";
         config << "# ---------------------------------------------------------------------------- #\n";
@@ -127,4 +132,5 @@ namespace Chimera {
     }
 
     Config::Config(const char *path) : p_path(path) {}
+    Config::Config(const std::filesystem::path path) : p_path(path.string()) {}
 }

@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <optional>
 #include <filesystem>
 
 namespace Chimera {
@@ -19,7 +20,7 @@ namespace Chimera {
         std::size_t file_size;
         std::filesystem::file_time_type timestamp; // time it was modified
     };
-    
+
     /**
      * Get the loaded map
      * @param  name name of map
@@ -31,12 +32,17 @@ namespace Chimera {
      * Set up loading maps outside of the maps directory
      */
     void set_up_map_loading();
-    
+
     /**
      * Load the map
      * @param map_name map to load
      * @return         loaded map
      */
     LoadedMap *load_map(const char *map_name);
+
+    /**
+     * Check whether a map name in a valid win32 ASCII file name
+     */
+    bool map_name_is_valid(const char *map) noexcept;
 }
 #endif

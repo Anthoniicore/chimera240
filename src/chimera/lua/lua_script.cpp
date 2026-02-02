@@ -9,13 +9,17 @@
 #include "../halo_data/map.hpp"
 #include "../localization/localization.hpp"
 #include "../output/output.hpp"
-#include "../version.hpp"
 #include "../chimera.hpp"
+#include "../config/ini.hpp"
 #include "../halo_data/game_engine.hpp"
+#include "../halo_data/tag.hpp"
+#include "../output/draw_text.hpp"
+#include "../fix/map_hacks/map_hacks.hpp"
 #include "lua_filesystem.hpp"
 #include "lua_game.hpp"
 #include "lua_variables.hpp"
 #include "lua_io.hpp"
+#include "version.hpp"
 
 namespace fs = std::filesystem;
 
@@ -40,7 +44,7 @@ namespace Chimera {
         luaL_openlibs(state);
 
         // Update Lua path
-        auto new_lua_path = fs::path(get_chimera().get_path()) / "lua" / "modules";
+        auto new_lua_path = get_chimera().get_path() / "lua" / "modules";
         lua_getglobal(state, "package");
         lua_pushstring(state, (new_lua_path.string() + "\\?.lua").c_str());
         lua_setfield(state, -2, "path");
@@ -83,7 +87,7 @@ namespace Chimera {
 
         lua_pushstring(state, global ? "global" : "map");
         lua_setglobal(state, "script_type");
-        
+
         lua_pushboolean(state, sandbox);
         lua_setglobal(state, "sandboxed");
 
@@ -148,7 +152,7 @@ namespace Chimera {
 
     void load_map_script() noexcept {
         auto &map_header = get_map_header();
-        auto lua_directory = fs::path(get_chimera().get_path()) / "lua";
+        auto lua_directory = get_chimera().get_path() / "lua";
         auto script_path = lua_directory / "scripts" / "map" / (std::string(map_header.name) + ".lua");
         if(fs::exists(script_path)) {
             auto script = read_script_file(script_path);
@@ -157,20 +161,29 @@ namespace Chimera {
                 load_lua_script(script_name.c_str(), script.c_str(), script.size(), false, false);
             }
         }
-        
-        // TODO: Add a new method for handling Lua scripts in maps, since this gets destroyed by zstandard compression... and there may be invalid stuff in here 
-        /* else if(game_engine() == GameEngine::GAME_ENGINE_CUSTOM_EDITION) {
+        // Load script embbended in tag data if allowed. We do not support this on Halo Trial.
+        else if((global_fix_flags.embedded_lua || get_chimera().get_ini()->get_value_bool("memory.load_embedded_lua").value_or(false)) && game_engine() != GameEngine::GAME_ENGINE_DEMO) {
             auto *script = reinterpret_cast<const char *>(map_header.lua_script_data);
             auto script_size = map_header.lua_script_size;
             if(script && script_size) {
-                auto map_filename = std::string(map_header.name) + ".map";
-                load_lua_script(map_filename.c_str(), script, script_size, true, false);
+                // Check that the TNT is where we expect it to be.
+                auto &tag_data_header = get_tag_data_header();
+                auto *tag_data_address = reinterpret_cast<const char *>(&tag_data_header);
+                auto *tag_data_address_end = tag_data_address + (64 * 1024 * 1024);
+                if (script >= tag_data_address && script + script_size < tag_data_address_end) {
+                    // Light the fuse.
+                    auto map_filename = std::string(map_header.name) + ".map";
+                    load_lua_script(map_filename.c_str(), script, script_size, true, false);
+                }
+                else {
+                    console_error("Unable to load embedded Lua script: Invalid location");
+                }
             }
-        } */
+        }
     }
 
     void load_global_scripts() noexcept {
-        auto lua_directory = fs::path(get_chimera().get_path()) / "lua";
+        auto lua_directory = get_chimera().get_path() / "lua";
         for(auto &entry : fs::directory_iterator(lua_directory / "scripts" / "global")) {
             auto file_path = entry.path();
             if(file_path.extension() == ".lua") {
@@ -199,7 +212,12 @@ namespace Chimera {
     }
 
     void print_error(lua_State *state) noexcept {
-        console_error(lua_tostring(state, -1));
+        std::string error = lua_tostring(state, -1);
+        std::stringstream ss(error);
+        std::string line;
+        while(std::getline(ss, line, '\n')) {
+            console_error(line.c_str());
+        }
         lua_pop(state, 1);
     }
 
@@ -213,6 +231,8 @@ namespace Chimera {
             }
             lua_close(this->state);
         }
+
+        clear_custom_font_overrides();
     }
 
     LuaAmbiguousTypeArgument LuaAmbiguousTypeArgument::check_argument(LuaScript &script, int arg, bool do_lua_error) {

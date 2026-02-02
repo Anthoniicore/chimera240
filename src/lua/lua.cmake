@@ -1,17 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 
-# We need C99 to build Lua
-set(CMAKE_C_STANDARD 99)
-
-# C compiler flags
-set(CMAKE_C_FLAGS "-Wall -Wextra")
-
 # Set Lua source files
 add_library(lua STATIC
     src/lua/lapi.c
     src/lua/lauxlib.c
     src/lua/lbaselib.c
-    src/lua/lbitlib.c
     src/lua/lcode.c
     src/lua/lcorolib.c
     src/lua/lctype.c
@@ -37,9 +30,11 @@ add_library(lua STATIC
     src/lua/ltable.c
     src/lua/ltablib.c
     src/lua/ltm.c
-    src/lua/luac.c
     src/lua/lundump.c
     src/lua/lutf8lib.c
     src/lua/lvm.c
     src/lua/lzio.c
 )
+
+# We need C99 to build Lua
+target_compile_features(lua PRIVATE c_std_99)

@@ -1,10 +1,9 @@
 #define MODS_PATH "mods\\"
 
 #include <w32api.h>
-#define _WIN32_WINNT Windows7
-
 #include <windows.h>
 #include <winbase.h>
+#include <winver.h>
 #include <shlwapi.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -12,6 +11,10 @@
 typedef struct {
     HMODULE module;
 } LoadedDLL;
+
+#ifdef CHIMERA_WINXP
+typedef BOOL (WINAPI *SetProcessDEPPolicy_fn_ptr)(DWORD);
+#endif
 
 static LoadedDLL *loaded_dlls;
 static int dll_count = 0;
@@ -117,20 +120,72 @@ static BOOL load_dlls() {
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     static WSADATA fun = {};
 
+    (void)reserved;
+    (void)instance;
+
     switch(reason) {
         case DLL_PROCESS_ATTACH:
             {
-                // Check if we're CD'd into the Halo directory
+                // Get the exe path
                 static char exe_path[MAX_PATH];
                 memset(exe_path, 0, sizeof(exe_path));
                 GetModuleFileNameA(NULL, exe_path, sizeof(exe_path));
+
+                // Check the exe version
+                DWORD handle;
+                DWORD ver_info_size = GetFileVersionInfoSize(exe_path, &handle);
+                const char *ve = "Version check error";
+                if(ver_info_size == 0) {
+                    MessageBox(NULL, "Executable does not have valid version information.", ve, MB_OK | MB_ICONERROR);
+                    ExitProcess(137);
+                }
+
+                LPBYTE ver_info = (LPBYTE)malloc(ver_info_size);
+                if(!ver_info) {
+                    ExitProcess(137);
+                }
+
+                if(!GetFileVersionInfo(exe_path, 0, ver_info_size, ver_info)) {
+                    MessageBox(NULL, "Could not get file version information from executable.", ve, MB_OK | MB_ICONERROR);
+                    free(ver_info);
+                    ExitProcess(137);
+                }
+
+                LPVOID ver_buf;
+                UINT ver_buf_size;
+                if(!VerQueryValue(ver_info, "\\StringFileInfo\\040904B0\\FileVersion", &ver_buf, &ver_buf_size)) {
+                    MessageBox(NULL, "Executable file version was not found.", ve, MB_OK | MB_ICONERROR);
+                    free(ver_info);
+                    ExitProcess(137);
+                }
+
+                char *exe_version = ver_buf;
+                if(ver_buf_size != 14 || *(exe_version + 13) != '\0') {
+                    MessageBox(NULL, "Executable file version is not a valid halo version string.", ve, MB_OK | MB_ICONERROR);
+                    free(ver_info);
+                    ExitProcess(137);
+                }
+
+                // We only support Halo Trial or retail Halo PC and Custom Edition that has been updated to 1.10
+                const char *demo_version = "01.00.00.0578";
+                const char *full_version = "01.00.10.0621";
+                if(strcmp(exe_version, full_version) != 0 && strcmp(exe_version, demo_version) != 0) {
+                    char message[256];
+                    memset(message, 0, sizeof(message));
+                    snprintf(message, sizeof(message), "Current game version is %s.\nOnly the following versions can be used with Chimera:\n\n%s (Halo Trial)\n%s (Retail Halo PC/Halo Custom Edition)", exe_version, demo_version, full_version);
+                    MessageBox(NULL, message, ve, MB_OK | MB_ICONERROR);
+                    free(ver_info);
+                    ExitProcess(137);
+                }
+
+                free(ver_info);
 
                 // Get the current directory
                 static char cd_path[MAX_PATH];
                 memset(cd_path, 0, sizeof(cd_path));
                 DWORD cd_len = GetCurrentDirectory(sizeof(cd_path), cd_path);
 
-                // Make sure we're in the same CD
+                // Check if we're CD'd into the Halo directory
                 bool in_cd;
                 if(strncmp(cd_path, exe_path, cd_len) == 0) { // does the start match?
                     in_cd = true;
@@ -155,17 +210,22 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
 
                 // Make sure it's the same
                 if(!in_cd) {
-                    char error_message[MAX_PATH * 2 + 256];
-                    snprintf(error_message, sizeof(error_message), "Make sure your current directory is the same as the executable's current directory.\n\nEXE: %s\n\nCD: %s", exe_path, cd_path);
-                    MessageBox(NULL, error_message, "Unable to load Chimera", MB_ICONERROR | MB_OK);
                     ExitProcess(135);
                 }
 
                 // Do this
                 WSAStartup(MAKEWORD(2,2), &fun);
 
-                // Enable DEP
+                // Enable DEP (if doable)
+                #ifndef CHIMERA_WINXP
                 SetProcessDEPPolicy(PROCESS_DEP_ENABLE);
+                #else
+                HANDLE kernel32 = GetModuleHandle("kernel32.dll");
+                SetProcessDEPPolicy_fn_ptr SetProcessDEPPolicy_fn = (SetProcessDEPPolicy_fn_ptr)GetProcAddress(kernel32, "SetProcessDEPPolicy");
+                if(SetProcessDEPPolicy_fn) {
+                    SetProcessDEPPolicy_fn(1);
+                }
+                #endif
 
                 // Terminate if we have to
                 if(!load_dlls()) {

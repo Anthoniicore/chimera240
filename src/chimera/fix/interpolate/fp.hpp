@@ -3,19 +3,29 @@
 #ifndef CHIMERA_INTERPOLATE_FP_HPP
 #define CHIMERA_INTERPOLATE_FP_HPP
 
+#include "interpolate.hpp"
+
 namespace Chimera {
+
     /**
-     * Interpolate first person.
+     * Interpolate first person (visual only).
+     * Uses interpolation_tick_progress (0.0 → 1.0).
      */
     void interpolate_fp_before() noexcept;
 
     /**
-     * Uninterpolate first person.
+     * Restore original first person state after rendering.
      */
     void interpolate_fp_after() noexcept;
 
     /**
-     * Set the tick flag, swapping buffers for the next tick.
+     * Clear interpolation buffers.
+     * Should be called on state changes (map load, revert, etc.).
+     */
+    void interpolate_fp_clear() noexcept;
+
+    /**
+     * Mark that a new tick has passed (swap buffers next frame).
      */
     void interpolate_fp_on_tick() noexcept;
 }

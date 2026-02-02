@@ -19,6 +19,7 @@
 #include "../halo_data/multiplayer.hpp"
 #include "../map_loading/map_loading.hpp"
 #include "../output/output.hpp"
+#include "../output/error_box.hpp"
 
 #include "fast_load.hpp"
 
@@ -29,18 +30,18 @@ extern "C" {
 
 namespace Chimera {
     std::filesystem::path MapEntry::get_file_path() {
-        auto p1 = std::filesystem::path("maps") / (this->name + ".map");
+        auto p1 = get_chimera().get_map_path() / (this->name + ".map");
         if(std::filesystem::exists(p1)) {
             return p1;
         }
         else {
-            return std::filesystem::path(get_chimera().get_path()) / "maps" / (this->name + ".map");
+            return get_chimera().get_download_map_path() / (this->name + ".map");
         }
     }
-    
+
     static bool same_string_case_insensitive(const char *a, const char *b) {
         if(a == b) return true;
-        while(std::tolower(*a) == std::tolower(*b)) {
+        while(std::tolower(*a, std::locale("C")) == std::tolower(*b, std::locale("C"))) {
             if(*a == 0) return true;
             a++;
             b++;
@@ -139,7 +140,7 @@ namespace Chimera {
                 overwrite(get_chimera().get_signature("load_multiplayer_maps_sig").data(), static_cast<std::uint8_t>(0xC3));
 
                 // Load the maps list on the next tick
-                add_frame_event(reload_map_list_frame);
+                add_map_load_event(reload_map_list_frame, EventPriority::EVENT_PRIORITY_BEFORE);
 
                 // Stop Halo from freeing the map list on close since it will just segfault if it does that
                 overwrite(get_chimera().get_signature("free_map_index_sig").data(), static_cast<std::uint8_t>(0xC3));
@@ -171,42 +172,42 @@ namespace Chimera {
             }
         }
     }
-    
+
     static std::vector<MapEntry> all_maps;
-    
+
     template <typename MapIndexType> static void resync_map_list() {
         // Hold our indices
         static MapIndexType **indices = nullptr;
         static std::uint32_t *count = nullptr;
         static std::vector<MapIndexType> indices_vector;
-        
+
         auto &map_list = get_map_list();
         indices = reinterpret_cast<MapIndexType **>(&map_list.map_list);
         count = reinterpret_cast<std::uint32_t *>(&map_list.map_count);
         indices_vector.clear();
-        
+
         for(auto &i : all_maps) {
             if(!i.multiplayer) {
                 continue;
             }
-            
+
             auto *map = &indices_vector.emplace_back();
             map->file_name = i.name.c_str();
-            map->map_name_index = i.index.value_or(13);
-            
+            map->map_name_index = i.index.value_or(19);
+
             if(sizeof(*map) >= sizeof(MapIndexRetail)) {
                 reinterpret_cast<MapIndexRetail *>(map)->loaded = 1;
-                
+
                 if(sizeof(*map) >= sizeof(MapIndexCustomEdition)) {
                     reinterpret_cast<MapIndexCustomEdition *>(map)->crc32 = i.crc32.value_or(0xFFFFFFFF);
                 }
             }
         }
-        
+
         *indices = indices_vector.data();
         *count = indices_vector.size();
     }
-    
+
     void resync_map_list() {
         auto engine = game_engine();
 
@@ -222,7 +223,7 @@ namespace Chimera {
                 break;
         }
     }
-    
+
     MapEntry *get_map_entry(const char *map_name) {
         for(auto &map : all_maps) {
             if(same_string_case_insensitive(map_name, map.name.c_str())) {
@@ -231,24 +232,37 @@ namespace Chimera {
         }
         return nullptr;
     }
-    
-    MapEntry &add_map_to_map_list(const char *map_name, std::optional<std::uint32_t> map_index) {
-        // Don't add maps we've already added
-        MapEntry *map;
-        if((map = get_map_entry(map_name)) != nullptr) {
-            return *map;
+
+    static MapEntry *maybe_add_map_to_map_list(const char *map_name, std::optional<std::uint32_t> map_index = std::nullopt) {
+        // Don't add maps that are bullshit.
+        if(!map_name_is_valid(map_name)) {
+            return nullptr;
         }
-        
+
+        // Don't add maps we've already added
+        MapEntry *map_possibly;
+        if((map_possibly = get_map_entry(map_name)) != nullptr) {
+            return map_possibly;
+        }
+
         // First, let's lowercase it
-        char map_name_lowercase[32];
+        char map_name_lowercase[32] = {};
         std::strncpy(map_name_lowercase, map_name, sizeof(map_name_lowercase) - 1);
-        
+        for(auto &i : map_name_lowercase) {
+            i = std::tolower(i, std::locale("C"));
+        }
+
         // Add it!
-        map = &all_maps.emplace_back();
-        map->name = map_name_lowercase;
-        map->index = map_index;
-        map->multiplayer = true;
-        
+        MapEntry map;
+        map.name = map_name_lowercase;
+        map.index = map_index;
+        map.multiplayer = true;
+
+        // Make sure it exists first.
+        if(!std::filesystem::exists(map.get_file_path())) {
+            return nullptr;
+        }
+
         // If it's known to not be a multiplayer map, set this
         static const char *NON_MULTIPLAYER_MAPS[] = {
             "a10",
@@ -265,46 +279,52 @@ namespace Chimera {
         };
         for(auto &nmp : NON_MULTIPLAYER_MAPS) {
             if(same_string_case_insensitive(nmp, map_name)) {
-                map->multiplayer = false;
+                map.multiplayer = false;
             }
         }
-        
-        return *map;
+
+        return &all_maps.emplace_back(std::move(map));
+    }
+
+    MapEntry &add_map_to_map_list(const char *map_name) {
+        // Attempt to add it. If it fails, exit gracefully
+        auto *ptr = maybe_add_map_to_map_list(map_name, std::nullopt);
+        if(ptr == nullptr) {
+            char error_message[256];
+            std::snprintf(error_message, sizeof(error_message), "Failed to load %s.map into the maps list.\n\nMake sure the map exists and try again.", map_name);
+            show_error_box("Map error", error_message);
+            std::exit(EXIT_FAILURE);
+        }
+        return *ptr;
     }
 
     static void reload_map_list() {
         // Clear the bitch
         auto old_maps = all_maps;
         all_maps.clear();
-        
-        std::uint32_t stock_index = 0;
-        #define ADD_STOCK_MAP(map_name) add_map_to_map_list(map_name, stock_index++)
-        
-        if(game_engine() == GameEngine::GAME_ENGINE_DEMO) {
-            ADD_STOCK_MAP("bloodgulch");
-        }
-        else {
-            ADD_STOCK_MAP("beavercreek");
-            ADD_STOCK_MAP("sidewinder");
-            ADD_STOCK_MAP("damnation");
-            ADD_STOCK_MAP("ratrace");
-            ADD_STOCK_MAP("prisoner");
-            ADD_STOCK_MAP("hangemhigh");
-            ADD_STOCK_MAP("chillout");
-            ADD_STOCK_MAP("carousel");
-            ADD_STOCK_MAP("boardingaction");
-            ADD_STOCK_MAP("bloodgulch");
-            ADD_STOCK_MAP("wizard");
-            ADD_STOCK_MAP("putput");
-            ADD_STOCK_MAP("longest");
-            ADD_STOCK_MAP("icefields");
-            ADD_STOCK_MAP("deathisland");
-            ADD_STOCK_MAP("dangercanyon");
-            ADD_STOCK_MAP("infinity");
-            ADD_STOCK_MAP("timberland");
-            ADD_STOCK_MAP("gephyrophobia");
-        }
-        
+
+        #define ADD_STOCK_MAP(map_name, index) maybe_add_map_to_map_list(map_name, index)
+
+        ADD_STOCK_MAP("beavercreek", 0);
+        ADD_STOCK_MAP("sidewinder", 1);
+        ADD_STOCK_MAP("damnation", 2);
+        ADD_STOCK_MAP("ratrace", 3);
+        ADD_STOCK_MAP("prisoner", 4);
+        ADD_STOCK_MAP("hangemhigh", 5);
+        ADD_STOCK_MAP("chillout", 6);
+        ADD_STOCK_MAP("carousel", 7);
+        ADD_STOCK_MAP("boardingaction", 8);
+        ADD_STOCK_MAP("bloodgulch", 9);
+        ADD_STOCK_MAP("wizard", 10);
+        ADD_STOCK_MAP("putput", 11);
+        ADD_STOCK_MAP("longest", 12);
+        ADD_STOCK_MAP("icefields", 13);
+        ADD_STOCK_MAP("deathisland", 14);
+        ADD_STOCK_MAP("dangercanyon", 15);
+        ADD_STOCK_MAP("infinity", 16);
+        ADD_STOCK_MAP("timberland", 17);
+        ADD_STOCK_MAP("gephyrophobia", 18);
+
         auto add_map_folder = [](std::filesystem::path directory) {
             static const char *BLACKLISTED_MAPS[] = {
                 "bitmaps",
@@ -314,35 +334,39 @@ namespace Chimera {
                 "custom_sounds",
                 "custom_loc"
             };
-            
+
             for(auto &map : std::filesystem::directory_iterator(directory)) {
                 if(map.is_regular_file()) {
                     auto &path = map.path();
-                    
+
                     // Get extension
                     auto extension = path.extension().string();
                     if(same_string_case_insensitive(extension.c_str(), ".map")) {
                         // Get name
                         auto name = path.stem().string();
-                        
+
                         // Is it blacklisted?
                         for(auto &b : BLACKLISTED_MAPS) {
                             if(same_string_case_insensitive(name.c_str(), b)) {
                                 goto nope;
                             }
                         }
-                        
-                        add_map_to_map_list(name.c_str());
+
+                        maybe_add_map_to_map_list(name.c_str());
                     }
-                    
+
                     nope: continue;
                 }
             }
         };
-        
-        add_map_folder("maps");
-        add_map_folder(std::filesystem::path(get_chimera().get_path()) / "maps");
-        
+
+        auto map_path = get_chimera().get_map_path();
+        auto dl_map_path = get_chimera().get_download_map_path();
+        add_map_folder(map_path);
+        if (dl_map_path != map_path){
+            add_map_folder(dl_map_path);
+        }
+
         // Reset CRC32
         for(auto &i : old_maps) {
             auto *map = get_map_entry(i.name.c_str());
@@ -350,7 +374,7 @@ namespace Chimera {
                 map->crc32 = i.crc32;
             }
         }
-        
+
         resync_map_list();
     }
 

@@ -11,6 +11,7 @@ chimera_error_command_error                                                     
 chimera_error_command_unavailable                                               %s: Command is unavailable on your Halo installation (missing %s)
 chimera_error_not_enough_arguments                                              %s: Not enough arguments were specified. Expected at least %zu
 chimera_error_too_many_arguments                                                %s: Too many arguments were specified. Expected at most %zu
+chimera_error_invalid_scripted_chimera_command                                  %s: Invalid scripted Chimera command
 
 chimera_error_must_be_in_a_server                                               You have to be in a server to do that.
 chimera_error_must_be_host                                                      You have to be the host to do that.
@@ -19,6 +20,7 @@ chimera_error_takes_player_number                                               
 chimera_error_failed_to_open_init                                               Failed to open init file %s
 chimera_error_cannot_download_retail_maps_1                                     Retail Halo PC and HaloMD maps are unsupported by the map downloader.
 chimera_error_cannot_download_retail_maps_2                                     Modify chimera.ini and set \"download_retail_maps\" under \"memory\" to enable.
+chimera_error_cannot_download_invalid_name                                      Map name is invalid.
 
 chimera_tag_map_is_protected                                                    Map is protected (unknown)
 
@@ -58,15 +60,16 @@ chimera_category_core                                                           
 chimera_category_custom_chat                                                    custom_chat
 chimera_category_debug                                                          debug
 chimera_category_enhancement                                                    enhancement
+chimera_category_fix                                                            fix
 chimera_category_lua                                                          	lua
 chimera_category_mouse                                                          mouse
 chimera_category_server                                                         server
 chimera_category_visual                                                         visual
 
 chimera_about_command_credits_header                                            Credits
-chimera_about_command_credits                                                   DEVELOPMENT\n    Snowy - Chimera lead developer\n    Vaporeon - Chat color palette, Testing\nSPANISH TRANSLATION\n    dr.oldboi\n    Jerry\n    MrChromed\n    Rock Candy\nTESTING\n    SteamFox
+chimera_about_command_credits                                                   DEVELOPMENT\n    Aerocatia\n    Cambid\n    MangoFizz\n    num0005\n    pR0Ps\n    Sledmine\n    Snowy (Chimera lead developer)\n    surrealwaffle\nSPANISH TRANSLATION\n    dr.oldboi\n    MangoFizz\n    MrChromed\n    Rock Candy\nTESTING\n    SteamFox
 chimera_about_command_license_header                                            License
-chimera_about_command_license                                                   Copyright (C) 2020 Snowy\n\nThis software is licensed under the GNU General Public License version 3.\nSee https://www.gnu.org/licenses/ for more information.
+chimera_about_command_license                                                   Copyright (C) 2025 Snowy\n\nThis software is licensed under the GNU General Public License version 3.\nSee https://www.gnu.org/licenses/ for more information.
 chimera_about_command_help                                                      List information about this mod.
 chimera_af_command_help                                                         Enable anisotropic filtering.
 chimera_aim_assist_command_help                                                 Enable aim assist.
@@ -75,8 +78,6 @@ chimera_auto_uncrouch_help                                                      
 chimera_block_all_bullshit_help                                                 Disable various things that most people may find annoying.
 chimera_block_auto_center_command_help                                          Set whether auto centering is disabled.
 chimera_block_button_quotes_command_help                                        Set whether or not to remove quotes from button prompts.
-chimera_block_buffering_command_help                                            Disable buffering. May improve mouse input.
-chimera_block_buffering_command_warning                                         Disable Buffering is already enabled (likely via config.txt)!
 chimera_block_camera_shake_command_help                                         Disable camera shaking from damage.
 chimera_block_extra_weapon_blocked                                              Blocked %s
 chimera_block_extra_weapon_error_cannot_get_object                              Failed to read your object (you are dead)
@@ -92,6 +93,7 @@ chimera_block_gametype_indicator_command_help                                   
 chimera_block_gametype_rules_command_help                                       Disable gametype rules at the start of a game.
 chimera_block_hold_f1_command_help                                              Disable the Hold \"F1\" for score prompt.
 chimera_block_loading_screen_command_help                                       Disable loading screen.
+chimera_block_multitexture_overlays_command_help                                Disable multitexture overlays.
 chimera_block_mouse_acceleration_command_help                                   Disable mouse acceleration.
 chimera_block_server_ip_command_help                                            Hide the server IP.
 chimera_block_zoom_blur_command_help                                            Disable scope blur.
@@ -134,6 +136,13 @@ chimera_deadzones_command_help                                                  
 chimera_diagonals_command_help                                                  Set diagonals for controller movement in multiplayer.
 chimera_enable_console_command_help                                             Enable the console.
 chimera_enable_console_command_warning                                          Console was enabled before startup (-console) and cannot be disabled.
+
+chimera_fix_blue_particles_command_help                                         Fix blue particles appearing in 32-bit maps.
+chimera_fix_contrails_command_help                                              Fix contrail behavior on high frame rates.
+chimera_fix_flashlight_command_help                                             Fix flashlight being too dim.
+chimera_fix_lens_flare_scaling_command_help                                     Fix lens flares not scaling at higher resolutions.
+chimera_fix_motion_sensor_command_help                                          Fix motion sensor behavior on high frame rates.
+
 chimera_fov_command_help                                                        Set field of view. Use \"auto\" for automatic FOV or suffix FOV with \"v\" to lock to a vertical FOV.
 chimera_fov_vehicle_command_help                                                Set field of view for vehicles. Use \"auto\" for automatic FOV or suffix FOV with \"v\" to lock to a vertical FOV.
 chimera_fov_cinematic_command_help                                              Set field of view for cinematics. Use \"auto\" for automatic FOV or suffix FOV with \"v\" to lock to a vertical FOV.
@@ -159,7 +168,7 @@ chimera_set_name_invalid_name_error                                             
 chimera_show_coordinates_help                                                   Display your coordinates.
 chimera_show_fps_help                                                           Display your frame rate.
 chimera_shrink_empty_weapons_help                                               Shrink all empty weapons on the ground.
-chimera_signature_info_command_dumped                                           Dumped all signatures to %s
+chimera_signature_info_command_dumped                                           Dumped all signatures to chimera_signature_dump.csv
 chimera_signature_info_command_error                                            Unknown signature %s
 chimera_signature_info_command_help                                             Get information for a signature.
 chimera_signature_info_command_signature_address                                Memory Address
@@ -196,12 +205,23 @@ chimera_map_info_command_mismatched                                             
 chimera_map_info_command_target_engine                                          Target engine
 chimera_widescreen_fix_command_warning_cannot_disable_font_override_enabled     Cannot disable widescreen fix while font_override is enabled
 
+chimera_map_downloading_downloading_map_format                                  Downloading %s.map...
+chimera_map_downloading_connecting_to_map_server                                Connecting to map server...
+chimera_map_downloading_transferred_label                                       Transferred:
+chimera_map_downloading_download_complete                                       Download complete. Reconnecting...
+chimera_map_downloading_canceling_download                                      Canceling download...
+chimera_map_downloading_download_canceled                                       Download canceled!
+chimera_map_downloading_download_failed                                         Download failed!
+chimera_map_downloading_retrying_on_retail                                      Retrying on retail Halo PC repo...
+chimera_map_downloading_something_went_wrong                                    Something went wrong. This may be a bug.
+
 chimera_lua_reload_scripts_command_help                                         Reload all Lua scripts.
 chimera_lua_scripts_were_reloaded                                               Lua scripts were reloaded.
 chimera_lua_warning_script_too_updated                                          %s was made for a newer version of Chimera.
 chimera_lua_warning_script_too_outdated                                         %s was made for a much older version of Chimera.
 chimera_lua_warning_script_possibly_not_work                                    It may possibly not work as intended.
 chimera_lua_warning_script_undefined_api_version                                %s does not have clua_version global defined.
+
 chimera_lua_error_failed_to_load_script                                         Failed to load %s
 chimera_lua_error_wrong_number_of_arguments                                     wrong number of arguments in %s
 chimera_lua_error_invalid_function_argument                                     invalid argument #%d in %s

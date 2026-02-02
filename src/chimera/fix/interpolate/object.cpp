@@ -27,6 +27,9 @@ namespace Chimera {
         /** Tag ID of the object. */
         TagID tag_id;
 
+        /** Object index ID. */
+        std::uint16_t index;
+
         /** This is the position of the object's center. */
         Point3D center;
 
@@ -35,6 +38,9 @@ namespace Chimera {
 
         /** These are the model nodes used by the object. */
         ModelNode nodes[MAX_NODES];
+
+        //** For device machines. */
+        float device_position = 0.0;
     };
 
     // This is the object data to interpolate.
@@ -87,7 +93,7 @@ namespace Chimera {
         auto &previous_tick_object = previous_tick[index];
 
         // Skip objects we can't interpolate or were already interpolated.
-        if(!current_tick_object.interpolate || !previous_tick_object.interpolate || current_tick_object.interpolated_this_frame || previous_tick_object.interpolated_this_frame) {
+        if(!current_tick_object.interpolate || current_tick_object.interpolated_this_frame) {
             return;
         }
 
@@ -101,6 +107,11 @@ namespace Chimera {
         // Skip if the tags do not match
         auto &tag_id = object->tag_id;
         if(tag_id != current_tick_object.tag_id || previous_tick_object.tag_id != tag_id) {
+            return;
+        }
+
+        // Skip if object index ID's don't match
+        if(current_tick_object.index != previous_tick_object.index) {
             return;
         }
 
@@ -147,6 +158,9 @@ namespace Chimera {
         // Get the object table
         auto &object_table = ObjectTable::get_object_table();
 
+        // Array that holds the parent object ID for each object index (if it has one).
+        ObjectID parent_object_array[OBJECT_BUFFER_SIZE] = {HaloID::null_id()};
+
         // Go through all objects.
         auto max_size = object_table.current_size;
         for(std::size_t i = 0; i < OBJECT_BUFFER_SIZE; i++) {
@@ -155,6 +169,12 @@ namespace Chimera {
 
             // Set this to false so if it doesn't exist or we can't interpolate it for some reason, we don't have to worry about it.
             current_tick_object.interpolate = false;
+
+            // Store index ID.
+            current_tick_object.index = object_table.first_element[i].id;
+
+            // Set this to zero for later.
+            current_tick_object.children_count = 0;
 
             // See if the object exists.
             auto *object = object_table.get_dynamic_object(i);
@@ -206,16 +226,30 @@ namespace Chimera {
             // Let's check if the distance between the two points is too great (such as if the object was teleported).
             current_tick_object.interpolate = distance_squared(current_tick_object.center, previous_tick[i].center) < MAX_INTERPOLATION_DISTANCES[object->type == OBJECT_TYPE_BIPED];
 
-            // Get any children of this object
-            current_tick_object.children_count = 0;
-            if(current_tick_object.interpolate) {
-                for(std::size_t o = 0; o < max_size && o < OBJECT_BUFFER_SIZE; o++) {
-                    auto *object = object_table.get_dynamic_object(o);
-                    if(object && object->parent.index.index == i) {
-                        current_tick_object.children[current_tick_object.children_count++] = o;
-                    }
+            // Bodge the damn beam emitters
+            if(object->type == OBJECT_TYPE_DEVICE_MACHINE) {
+                current_tick_object.device_position = reinterpret_cast<DeviceMachineDynamicObject *>(object)->device_position;
+                if(current_tick_object.interpolate) {
+                    current_tick_object.interpolate = !(current_tick_object.device_position < 0.002 && previous_tick[i].device_position > 0.9);
                 }
             }
+
+            // If this object is a child object, add the parent to the parent array.
+            if(!object->parent.is_null()) {
+                parent_object_array[i] = object->parent;
+            }
+        }
+
+        // Now go through the parent object array to add child objects to their parents children array.
+        for(std::size_t i = 0; i < max_size && i < OBJECT_BUFFER_SIZE; i++) {
+            // If object at index i has no parent, skip.
+            if(parent_object_array[i].is_null()) {
+                continue;
+            }
+
+            // If it does have a parent, put the index in the parent objects child array.
+            auto &current_tick_parent_object = current_tick[parent_object_array[i].index.index];
+            current_tick_parent_object.children[current_tick_parent_object.children_count++] = i;
         }
     }
 
@@ -246,11 +280,11 @@ namespace Chimera {
     }
 
     void interpolate_object_clear() noexcept {
+        // Just make sure we're not going to write garbage data to the game state.
         for(std::size_t i = 0; i < OBJECT_BUFFER_SIZE; i++) {
             current_tick[i].interpolate = false;
-            previous_tick[i].interpolate = false;
             current_tick[i].interpolated_this_frame = false;
-            previous_tick[i].interpolated_this_frame = false;
+            current_tick[i].index = 0;
         }
     }
 

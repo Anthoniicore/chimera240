@@ -35,9 +35,8 @@ set(COMMAND_FILES
     ${COMMAND_DIR}/client/debug/send_chat_message.cpp
     ${COMMAND_DIR}/client/debug/show_coordinates.cpp
     ${COMMAND_DIR}/client/debug/show_fps.cpp
-    ${COMMAND_DIR}/client/debug/vk.cpp
+    ${COMMAND_DIR}/client/debug/map_config_flags.cpp
     ${COMMAND_DIR}/client/enhancement/block_all_bullshit.cpp
-    ${COMMAND_DIR}/client/enhancement/block_buffering.cpp
     ${COMMAND_DIR}/client/enhancement/block_extra_weapon.cpp
     ${COMMAND_DIR}/client/enhancement/block_extra_weapon.S
     ${COMMAND_DIR}/client/enhancement/fp_reverb.cpp
@@ -48,17 +47,20 @@ set(COMMAND_FILES
     ${COMMAND_DIR}/client/lua/reload_scripts.cpp
     ${COMMAND_DIR}/client/mouse/block_mouse_acceleration.cpp
     ${COMMAND_DIR}/client/mouse/mouse_sensitivity.cpp
+    ${COMMAND_DIR}/client/server/master_server.cpp
     ${COMMAND_DIR}/client/server/spam_to_join.cpp
     ${COMMAND_DIR}/client/server/spam_to_join.S
     ${COMMAND_DIR}/client/server/spectate.cpp
     ${COMMAND_DIR}/client/server/spectate.S
     ${COMMAND_DIR}/client/visual/af.cpp
     ${COMMAND_DIR}/client/visual/block_auto_center.cpp
+    ${COMMAND_DIR}/client/visual/block_camera_shake.cpp
     ${COMMAND_DIR}/client/visual/block_gametype_indicator.cpp
     ${COMMAND_DIR}/client/visual/block_gametype_rules.cpp
     ${COMMAND_DIR}/client/visual/block_hold_f1.cpp
     ${COMMAND_DIR}/client/visual/block_letterbox.cpp
     ${COMMAND_DIR}/client/visual/block_loading_screen.cpp
+    ${COMMAND_DIR}/client/visual/block_multitexture_overlays.cpp
     ${COMMAND_DIR}/client/visual/block_server_ip.cpp
     ${COMMAND_DIR}/client/visual/block_zoom_blur.cpp
     ${COMMAND_DIR}/client/visual/camo_fix.cpp

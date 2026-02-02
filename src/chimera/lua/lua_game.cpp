@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 #include <cmath>
+#include <variant>
 #include "../console/console.hpp"
 #include "../halo_data/globals.hpp"
 #include "../halo_data/map.hpp"
@@ -68,6 +69,34 @@ namespace Chimera {
         }
     }
 
+    static int lua_create_font_override(lua_State *state) noexcept {
+        int args = lua_gettop(state);
+        if(args == 8) {
+            TagID tag_id;
+            tag_id.whole_id = luaL_checknumber(state, 1);
+            std::string family = luaL_checkstring(state, 2);
+            int size = luaL_checknumber(state, 3);
+            int weight = luaL_checknumber(state, 4);
+            int shadow_x = luaL_checknumber(state, 5);
+            int shadow_y = luaL_checknumber(state, 6);
+            int offset_x = luaL_checknumber(state, 7);
+            int offset_y = luaL_checknumber(state, 8);
+
+            try {
+                override_custom_font(tag_id, family, size, weight, std::make_pair(offset_x, offset_y), std::make_pair(shadow_x, shadow_y));
+            }
+            catch(std::runtime_error &e) {
+                Tag *tag = get_tag(tag_id);
+                return luaL_error(state, "%s %s", tag->path, e.what());
+            }
+
+            return 0;
+        }
+        else {
+            return luaL_error(state, localize("chimera_lua_error_wrong_number_of_arguments"), "create_font_override");
+        }
+    }
+
     static int lua_delete_object(lua_State *state) noexcept {
         int args = lua_gettop(state);
         if(args == 1) {
@@ -94,7 +123,7 @@ namespace Chimera {
             auto &resolution = get_resolution();
             float aspect_ratio = static_cast<float>(resolution.width) / resolution.height;
             float width_scale = (aspect_ratio * 480.0f) / 640.0f;
-            
+
             // Frame bounds
             std::int16_t offset_left = round(luaL_checknumber(state, 2) * width_scale);
             std::int16_t offset_top = luaL_checknumber(state, 3);
@@ -102,16 +131,18 @@ namespace Chimera {
             std::int16_t offset_bottom = luaL_checknumber(state, 5);
 
             // Font to use (Font tag id or generic font)
-            TagID font_tag_id;
+            std::variant<TagID, GenericFont> font;
             if(lua_isnumber(state, 6)) {
+                TagID font_tag_id;
                 font_tag_id.whole_id = luaL_checknumber(state, 6);
                 if(!get_tag(font_tag_id)) {
                     return luaL_error(state, localize("chimera_lua_error_draw_text_invalid_font_id"));
                 }
+                font = font_tag_id;
             }
             else {
                 auto generic_font = generic_font_from_string(luaL_checkstring(state, 6));
-                font_tag_id = get_generic_font(generic_font);
+                font = generic_font;
             }
 
             // Text alignment
@@ -138,7 +169,7 @@ namespace Chimera {
             color.blue = luaL_checknumber(state, 11);
 
             // Draw!
-            apply_text(text, offset_left, offset_top, offset_right, offset_bottom, color, font_tag_id, font_alignment, TextAnchor::ANCHOR_TOP_LEFT);
+            apply_text(text, offset_left, offset_top, offset_right, offset_bottom, color, font, font_alignment, TextAnchor::ANCHOR_TOP_LEFT);
 
             return 0;
         }
@@ -159,13 +190,53 @@ namespace Chimera {
         }
     }
 
+    // List of commands that can be executed
+    const char* allowed_chimera_commands[] = {
+        "chimera_show_fps",
+        "chimera_block_zoom_blur",
+        "chimera_devmode",
+        "chimera_budget",
+        "chimera_af",
+        "chimera_block_hold_f1",
+        "chimera_fov",
+        "chimera_mouse_sensitivity",
+    };
+
+    static int lua_execute_chimera_command(lua_State *state) noexcept {
+        int args = lua_gettop(state);
+        if(args == 2) {
+            bool found = false;
+            const char *command = luaL_checkstring(state, 1);
+            for (auto command_name : allowed_chimera_commands) {
+                // Check if command starts with the command name
+                if (std::strncmp(command, command_name, std::strlen(command_name)) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return luaL_error(state, localize("chimera_error_invalid_scripted_chimera_command"), command);
+            }
+            const bool save = lua_toboolean(state, 2);
+            const Command *found_command;
+            CommandResult result = get_chimera().execute_command(command, &found_command, save);\
+            if (result == COMMAND_RESULT_FAILED_ERROR_NOT_FOUND) {
+                return luaL_error(state, localize("chimera_error_command_not_found"), command);
+            }
+            return 0;
+        }
+        else {
+            return luaL_error(state, localize("chimera_lua_error_wrong_number_of_arguments"), "execute_chimera_command");
+        }
+    }
+
     static int lua_get_dynamic_player(lua_State *state) noexcept {
         int args = lua_gettop(state);
         if(args <= 1) {
             auto &objects_table = ObjectTable::get_object_table();
             auto &players_table = PlayerTable::get_player_table();
             BaseDynamicObject *dynamic_object = nullptr;
-            
+
             if(args == 0) {
                 auto *player = players_table.get_client_player();
                 if(player) {
@@ -261,7 +332,7 @@ namespace Chimera {
         if(args <= 1) {
             auto &players_table = PlayerTable::get_player_table();
             Player *player = nullptr;
-            
+
             if(args == 0) {
                 player = players_table.get_client_player();
             }
@@ -269,7 +340,7 @@ namespace Chimera {
                 std::size_t index = luaL_checkinteger(state, 1);
                 player = players_table.get_player_by_rcon_id(index);
             }
-            
+
             if(player) {
                 lua_pushinteger(state, reinterpret_cast<std::uint32_t>(player));
             }
@@ -304,7 +375,7 @@ namespace Chimera {
             const char *tag_path = luaL_checkstring(state, 2);
 
             auto tag_class_int = tag_class_from_string(tag_class);
-            
+
             if(tag_class_int != TagClassInt::TAG_CLASS_NULL) {
                 tag = get_tag(tag_path, tag_class_int);
             }
@@ -315,14 +386,14 @@ namespace Chimera {
         else {
             return luaL_error(state, localize("chimera_lua_error_wrong_number_of_arguments"), "get_tag");
         }
-        
+
         if(tag) {
             lua_pushinteger(state, reinterpret_cast<std::uint32_t>(tag));
         }
         else {
             lua_pushnil(state);
         }
-        
+
         return 1;
     }
 
@@ -548,5 +619,7 @@ namespace Chimera {
         lua_register(state, "spawn_object", lua_spawn_object);
         lua_register(state, "tick_rate", lua_tick_rate);
         lua_register(state, "ticks", lua_ticks);
+        lua_register(state, "create_font_override", lua_create_font_override);
+        lua_register(state, "execute_chimera_command", lua_execute_chimera_command);
     }
 }

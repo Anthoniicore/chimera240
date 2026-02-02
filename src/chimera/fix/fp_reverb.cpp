@@ -11,44 +11,46 @@
 
 namespace Chimera {
     extern "C" void override_fp_reverb_position_asm() noexcept;
+
     extern "C" void move_current_fp_sound_to_camera(std::uint32_t object_id, Point3D *sound_position) noexcept {
-        // If we're not in first person, don't do anything
+        // Solo aplicamos en primera persona
         if(camera_type() != CameraType::CAMERA_FIRST_PERSON) {
             return;
         }
 
-        // If it's not a thing, go away
+        // ID inválido
         if(object_id == 0xFFFFFFFF) {
             return;
         }
 
-        // Also, are we alive? If so, get our object.
+        // Obtener jugador local
         auto *player = PlayerTable::get_player_table().get_client_player();
         if(!player) {
             return;
         }
+
         auto &ot = ObjectTable::get_object_table();
         auto *player_object = reinterpret_cast<UnitDynamicObject *>(ot.get_dynamic_object(player->object_id));
         if(!player_object) {
             return;
         }
 
-        // Also, if this object is NOT our body, check if it's our weapon
-        if(object_id != player->object_id.whole_id) {
-            bool is_us = false;
+        // Verificar si el objeto corresponde al jugador o a cualquiera de sus armas
+        bool is_us = (object_id == player->object_id.whole_id);
+        if(!is_us) {
             for(auto &w : player_object->weapons) {
                 if(w.whole_id == object_id) {
                     is_us = true;
                     break;
                 }
             }
-            if(!is_us) {
-                return;
-            }
         }
 
-        auto &d = camera_data();
-        *sound_position = d.position;
+        // Si es nuestro cuerpo o cualquier arma que tengamos, mover sonido a la cámara
+        if(is_us) {
+            auto &d = camera_data();
+            *sound_position = d.position;
+        }
     }
 
     void set_up_fp_reverb_fix() noexcept {
@@ -60,11 +62,11 @@ namespace Chimera {
         auto *first_person_reverb_1 = chimera.get_signature("first_person_reverb_1_sig").data();
         auto *first_person_reverb_2 = chimera.get_signature("first_person_reverb_2_sig").data();
 
-        // Enable reverb
+        // Habilitar reverb
         static constexpr const SigByte tell_lies_on_the_internet[] = { 0x66, 0xB8, 0x0D, 0x00 };
         write_code_s(first_person_reverb_1, tell_lies_on_the_internet);
 
-        // Do the thing
+        // Hook para redirigir sonidos
         static Hook hook;
         write_jmp_call(reinterpret_cast<std::byte *>(first_person_reverb_2), hook, nullptr, reinterpret_cast<const void *>(override_fp_reverb_position_asm), false);
     }
@@ -75,3 +77,4 @@ namespace Chimera {
         chimera.get_signature("first_person_reverb_2_sig").rollback();
     }
 }
+

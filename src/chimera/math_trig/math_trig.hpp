@@ -4,10 +4,20 @@
 #define MATH_TRIG_HPP
 
 #include <windows.h>
+#include <cmath>
+#include <cstdint>
 
 #define HALO_PI 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
 #define DEGREES_TO_RADIANS(deg) (deg / 180.0 * HALO_PI)
 #define RADIANS_TO_DEGREES(rad) (rad / HALO_PI * 180.0)
+#define FLOOR(n, floor) ((n)<(floor)?(floor):(n))
+#define CEILING(n, ceiling) ((n)>(ceiling)?(ceiling):(n))
+#define PIN(n, floor, ceiling) ((n)<(floor) ? (floor) : CEILING(n, ceiling))
+#define fast_ftol_floor(x) fast_ftol(floor(x))
+#define FLAG(b) (1<<(b))
+#define TEST_FLAG(f, b) (((f)&FLAG(b))!=0)
+#define SET_FLAG(f, b, v) ((v) ? ((f)|=FLAG(b)) : ((f)&=~FLAG(b)))
+#define SWAP_FLAG(f, b) ((f)^=FLAG(b))
 
 namespace Chimera {
     struct ColorARGB;
@@ -55,6 +65,25 @@ namespace Chimera {
         ColorByte &operator=(const ColorByte &) noexcept = default;
     };
 
+    struct Vector2DInt {
+        short x;
+        short y;
+    };
+
+    struct Rectangle2D {
+        short top;
+        short left;
+        short bottom;
+        short right;
+    };
+
+    struct Plane3D {
+        float i;
+        float j;
+        float k;
+        float w;
+    };
+
     struct Point3D {
         float x;
         float y;
@@ -64,6 +93,20 @@ namespace Chimera {
     struct Point2D {
         float x;
         float y;
+    };
+
+    using Vector2D = Point2D;
+    using Vector3D = Point3D;
+
+    struct VectorIJ {
+        float i;
+        float j;
+    };
+
+    struct VectorIJK {
+        float i;
+        float j;
+        float k;
     };
 
     struct Euler3DPYR {
@@ -76,6 +119,30 @@ namespace Chimera {
         float yaw;
         float pitch;
         float roll;
+    };
+
+    struct Matrix4x3 {
+        float scale;
+        VectorIJK forward;
+        VectorIJK left;
+        VectorIJK up;
+        Point3D position;
+    };
+
+    struct Bounds2D {
+        float left;
+        float right;
+        float top;
+        float bottom;
+    };
+
+    struct Rectangle3DF {
+        float top;
+        float left;
+        float bottom;
+        float right;
+        float front;
+        float back;
     };
 
     struct RotationMatrix;
@@ -97,6 +164,14 @@ namespace Chimera {
         RotationMatrix(const RotationMatrix &) noexcept = default;
         RotationMatrix &operator =(const RotationMatrix &) noexcept = default;
     };
+
+    struct ProjectionMatrix {
+        float x[4];
+        float y[4];
+        float z[4];
+        float w[4];
+    };
+
 
     /**
      * Interpolate a quaternion.
@@ -193,6 +268,22 @@ namespace Chimera {
     float distance(const Point3D &a, const Point3D &b) noexcept;
 
     /**
+     * Calculate the magnitude of a 3D vector without taking square roots. If the square root isn't necessary, then this is faster.
+     * @param  x This is the X value.
+     * @param  y This is the Y value.
+     * @param  z This is the Z value.
+     * @return    Return the magnitude.
+     */
+    float magnitude_squared(float x, float y, float z) noexcept;
+
+    /**
+     * Calculate the magnitude of a 3D vector without taking square roots. If the square root isn't necessary, then this is faster.
+     * @param  a This is the point vector.
+     * @return    Return the magnitude.
+     */
+    float magnitude_squared(const Point3D &a) noexcept;
+
+    /**
      * Get the time elapsed since a counter.
      */
     double counter_time_elapsed(const LARGE_INTEGER &before) noexcept;
@@ -201,6 +292,17 @@ namespace Chimera {
      * Get the time elapsed between two counters.
      */
     double counter_time_elapsed(const LARGE_INTEGER &before, const LARGE_INTEGER &after) noexcept;
+
+    /**
+     * Convert float to long except make it do x87 fistp memes
+     */
+    long fast_ftol(float float_to_round) noexcept;
+
+    /**
+     * Convert 32-bit argb color to float.
+     */
+    void pixel32_to_real_argb_color(const std::uint32_t pixel, ColorARGB *color) noexcept;
+
 }
 
 #endif

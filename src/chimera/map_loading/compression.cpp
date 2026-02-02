@@ -10,9 +10,12 @@
 #include "compression.hpp"
 
 namespace Chimera {
-    static void decompress_header(const std::byte *header_input, std::byte *header_output) {
+    template<typename T> static bool decompress_header(const std::byte *header_input, std::byte *header_output) {
         // Check to see if we can't even fit the header
-        auto header_copy = *reinterpret_cast<const MapHeader *>(header_input);
+        auto header_copy = *reinterpret_cast<const T *>(header_input);
+        if(!header_copy.is_valid()) {
+            return false;
+        }
 
         // Figure out the new engine version
         auto new_engine_version = header_copy.engine_type;
@@ -62,8 +65,10 @@ namespace Chimera {
             demo_header.foot = 0x47666F74;
         }
         else {
-            *reinterpret_cast<MapHeader *>(header_output) = header_copy;
+            *reinterpret_cast<T *>(header_output) = header_copy;
         }
+
+        return true;
     }
 
     constexpr std::size_t HEADER_SIZE = sizeof(MapHeader);
@@ -102,7 +107,9 @@ namespace Chimera {
             // Make the output header and write it
             std::byte header_output[HEADER_SIZE];
             try {
-                decompress_header(reinterpret_cast<std::byte *>(&header_input), header_output);
+                if(!decompress_header<MapHeader>(reinterpret_cast<std::byte *>(&header_input), header_output)) {
+                    decompress_header<MapHeaderDemo>(reinterpret_cast<std::byte *>(&header_input), header_output);
+                }
             }
             catch (std::exception &) {
                 std::fclose(input_file);
@@ -190,19 +197,19 @@ namespace Chimera {
             std::FILE *output_file;
             std::size_t output_position = 0;
         } output_writer = { std::fopen(output, "wb") };
- 
+
         if(!output_writer.output_file) {
             std::fclose(output_writer.output_file);
             throw std::exception();
         }
- 
+
         LowMemoryDecompression decomp;
         decomp.write_callback = [](const std::byte *decompressed_data, std::size_t size, void *user_data) -> bool {
             auto &output_writer = *reinterpret_cast<OutputWriter *>(user_data);
             output_writer.output_position += size;
             return std::fwrite(decompressed_data, size, 1, reinterpret_cast<std::FILE *>(output_writer.output_file));
         };
- 
+
         try {
             decomp.decompress_map_file(input, &output_writer);
         }
@@ -211,7 +218,7 @@ namespace Chimera {
             throw;
         }
         std::fclose(output_writer.output_file);
- 
+
         return output_writer.output_position;
     }
 
@@ -221,7 +228,7 @@ namespace Chimera {
             std::size_t output_size;
             std::size_t output_position = 0;
         } output_writer = { output, output_size };
- 
+
         LowMemoryDecompression decomp;
         decomp.write_callback = [](const std::byte *decompressed_data, std::size_t size, void *user_data) -> bool {
             OutputWriter &output_writer = *reinterpret_cast<OutputWriter *>(user_data);
@@ -233,14 +240,14 @@ namespace Chimera {
             output_writer.output_position = new_position;
             return true;
         };
- 
+
         try {
             decomp.decompress_map_file(input, &output_writer);
         }
         catch (std::exception &e) {
             throw;
         }
- 
+
         return output_writer.output_position;
     }
 }

@@ -7,6 +7,7 @@
 #include "../config/ini.hpp"
 #include "../output/draw_text.hpp"
 #include "../halo_data/tag.hpp"
+#include "../halo_data/hud_defs.hpp"
 #include "../output/output.hpp"
 #include "../halo_data/resolution.hpp"
 #include "../fix/widescreen_fix.hpp"
@@ -95,24 +96,46 @@ namespace Chimera {
         void on_menu_hud_text_scoreboard_asm() noexcept;
         void on_menu_hud_text_unscaled_asm() noexcept;
         void on_menu_hud_text_unscaled_large_asm() noexcept;
+        void on_hud_text_textbox_esi_asm() noexcept;
+        const void *on_hud_text_textbox_esi_inst = nullptr;
+        void on_draw_textbox_icons_asm() noexcept;
+
         float hud_text_new_line_spacing = 0.0F;
+        bool hud_text_draw_is_textbox = false;
+        std::byte *skip_icon_hud_test_draw = nullptr;
     }
 
-    static const std::byte *hud_globals_data() noexcept {
+    static const HUDGlobals *hud_globals_data() noexcept {
         auto *tag = get_tag("globals\\globals", TagClassInt::TAG_CLASS_GLOBALS);
         auto *tag_data = tag->data;
         auto *interface_bitmaps = *reinterpret_cast<const std::byte **>(tag_data + 0x140 + 4);
         auto &hud_globals = *reinterpret_cast<const TagID *>(interface_bitmaps + 0x60 + 0xC);
         auto *hud_globals_tag = get_tag(hud_globals);
-        return hud_globals_tag->data;
+        return reinterpret_cast<HUDGlobals *>(hud_globals_tag->data);
     }
 
     static std::uint32_t hud_line_size() noexcept {
-        return *reinterpret_cast<const float *>(hud_globals_data() + 0x90) * font_pixel_height(GenericFont::FONT_LARGE);
+        return hud_globals_data()->messaging.spacing * font_pixel_height(GenericFont::FONT_LARGE);
     }
 
     static void on_frame() noexcept {
         hud_text_new_line_spacing = hud_line_size();
+    }
+
+    // This is just to get help textboxes rendering semi correctly.
+    extern "C" void is_textbox_with_icons(std::int16_t *element) noexcept {
+        if(!hud_text_draw_is_textbox) {
+            auto res = get_resolution();
+            int add = widescreen_fix_enabled() ? (static_cast<std::int16_t>((static_cast<double>(res.width) / res.height) * 480.000f - 640.000f) / 2.0f) : 0;
+
+            element[1] += add;
+            element[3] += add;
+
+            hud_text_draw_is_textbox = true;
+        }
+        else {
+            hud_text_draw_is_textbox = false;
+        }
     }
 
     extern "C" void on_pickup_hud_text(const wchar_t *string, std::uint32_t xy) noexcept {
@@ -240,7 +263,7 @@ namespace Chimera {
 
     void initialize_hud_text() noexcept {
         enabled = true;
-        set_widescreen_fix(true);
+        set_widescreen_fix(WidescreenFixSetting::WIDESCREEN_ON);
 
         auto &chimera = get_chimera();
 
@@ -286,11 +309,15 @@ namespace Chimera {
         write_code_s(widescreen_text_stare_name_sig, nop_fn);
         write_jmp_call(widescreen_text_stare_name_sig, stare_name, reinterpret_cast<const void *>(on_stare_hud_text_asm), nullptr, false);
 
-        // Fix multiplayer text
+        // Fix multiplayer text (Some bullshit included to stop help textboxes with icons completely breaking)
         static Hook hold_f1;
         auto *multiplayer_spawn_timer_hold_f1_for_score_text_call_sig = chimera.get_signature("multiplayer_spawn_timer_hold_f1_for_score_text_call_sig").data() + 14;
-        write_code_s(multiplayer_spawn_timer_hold_f1_for_score_text_call_sig, nop_fn);
-        write_jmp_call(multiplayer_spawn_timer_hold_f1_for_score_text_call_sig, hold_f1, reinterpret_cast<const void *>(on_hud_text_esi_asm), nullptr, false);
+        skip_icon_hud_test_draw = chimera.get_signature("multiplayer_spawn_timer_hold_f1_for_score_text_call_sig").data() + 19;
+        //write_code_s(multiplayer_spawn_timer_hold_f1_for_score_text_call_sig, nop_fn);
+
+        write_function_override(multiplayer_spawn_timer_hold_f1_for_score_text_call_sig, hold_f1, reinterpret_cast<const void *>(on_hud_text_textbox_esi_asm), &on_hud_text_textbox_esi_inst);
+        static Hook is_textbox;
+        write_jmp_call(chimera.get_signature("widescreen_menu_text_icon_sig").data() + 9, is_textbox, reinterpret_cast<const void *>(on_draw_textbox_icons_asm), reinterpret_cast<const void *>(on_draw_textbox_icons_asm));
 
         // Menu text
         static Hook widescreen_menu_text;

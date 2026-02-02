@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-#include "codefinder.h"
-#define WIN32_MEAN_AND_LEAN
 #include <windows.h>
+#include "codefinder.h"
 
 PIMAGE_SECTION_HEADER CodeFinder::GetSection(HANDLE module) {
 	PIMAGE_DOS_HEADER dosHeader;
@@ -69,7 +68,7 @@ std::vector<std::uintptr_t> CodeFinder::find() {
 		if(signature[i] == -1) {
 			fastFind = false;
 		} else if(signature[i] < 0 || signature[i] > 0xFF) {
-			MessageBox(NULL, "Invalid signature", 0, 0);
+			std::exit(12345);
 		}
 	}
 
@@ -110,12 +109,12 @@ void CodeFinder::boyerFind(const short* signature, size_t sigLength, BYTE* memor
 	}
 }
 
-std::uintptr_t FindCode(HANDLE module, const short* signature, size_t signatureLen) {
+std::uintptr_t FindCode(HANDLE module, const short* signature, size_t signatureLen, unsigned int match_num = 0) {
 	CodeFinder finder(module, signature, signatureLen);
 	std::vector<std::uintptr_t> locations = finder.find();
 
-	if(!locations.empty()) {
-		return locations[0];
+	if(!locations.empty() and match_num < locations.size()) {
+		return locations[match_num];
 	} else {
 		return (std::uintptr_t) NULL;
 	}

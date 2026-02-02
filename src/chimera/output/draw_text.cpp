@@ -14,9 +14,11 @@
 #include "../event/frame.hpp"
 #include "../event/d3d9_end_scene.hpp"
 #include "../event/d3d9_reset.hpp"
+#include "../event/map_load.hpp"
 #include "../halo_data/resolution.hpp"
 #include "../fix/widescreen_fix.hpp"
 #include "../halo_data/hud_fonts.hpp"
+#include "error_box.hpp"
 
 namespace Chimera {
     #include "color_codes.hpp"
@@ -25,6 +27,17 @@ namespace Chimera {
     static std::pair<int, int> system_font_shadow, console_font_shadow, small_font_shadow, large_font_shadow, smaller_font_shadow, ticker_font_shadow;
     static std::pair<int, int> system_font_offset, console_font_offset, small_font_offset, large_font_offset, smaller_font_offset, ticker_font_offset;
     static LPDIRECT3DDEVICE9 dev = nullptr;
+
+    struct CustomFontOverride {
+        std::string family;
+        TagID tag_id;
+        LPD3DXFONT override;
+        int weight;
+        int scaled_size;
+        std::pair<int, int> shadow;
+        std::pair<int, int> offset;
+    };
+    static std::vector<CustomFontOverride> map_custom_overrides;
 
     static LPD3DXFONT get_override_font(GenericFont font) {
         // Do NOT use these if widescreen fix is disabled unless we're 4:3
@@ -59,6 +72,12 @@ namespace Chimera {
             return get_override_font(*generic);
         }
         else {
+            TagID tag_id = std::get<TagID>(font);
+            for(auto &font : map_custom_overrides) {
+                if(font.tag_id.whole_id == tag_id.whole_id) {
+                    return font.override;
+                }
+            }
             return nullptr;
         }
     }
@@ -272,7 +291,7 @@ namespace Chimera {
                             break;
                         case 't':
                             align = FontAlignment::ALIGN_LEFT;
-                            if(tabs < sizeof(font_data.tabs) / sizeof(*font_data.tabs)) {
+                            if(tabs + 1 < sizeof(font_data.tabs) / sizeof(*font_data.tabs)) {
                                 tabs++;
                             }
                             break;
@@ -335,6 +354,15 @@ namespace Chimera {
                 shadow_offset = ticker_font_shadow;
                 offset = ticker_font_offset;
             }
+            else {
+                for(auto &font : map_custom_overrides) {
+                    if(font.override == text.override) {
+                        shadow_offset = font.shadow;
+                        offset = font.offset;
+                        break;
+                    }
+                }
+            }
 
             // Get our rects up
             RECT rect;
@@ -385,17 +413,48 @@ namespace Chimera {
 
             auto *override_font = text.override;
 
+            // Calculate the width of a space for the given override font.
+            RECT temp_rect_1;
+            RECT temp_rect_2;
+
+            std::string space = ("_ _");
+            std::string underscore = ("__");
+            override_font->DrawText(NULL, space.data(), -1, &temp_rect_1, DT_CALCRECT, 0xFFFFFFFF);
+            override_font->DrawText(NULL, underscore.data(), -1, &temp_rect_2, DT_CALCRECT, 0xFFFFFFFF);
+            //Small fudge factor because override fonts have different widths compared to the games.
+            auto space_width = (temp_rect_1.right - temp_rect_1.left) - (temp_rect_2.right - temp_rect_2.left) + (0.15 * scale);
+
             if(u8) {
-                if(draw_shadow) {
-                    override_font->DrawText(NULL, u8->data(), -1, &rshadow, align, color_shadow);
+                if(!u8->empty()) {
+                    if(align == DT_RIGHT && u8->back() == static_cast<char>(' ')) {
+                        // Add the trailing spaces as an offset to the rect struct.
+                        auto num_spaces = u8->find_last_not_of(static_cast<char>(' '));
+                        rect.right = rect.right - (u8->length() - num_spaces) * space_width;
+                        rect.left = rect.left - (u8->length() - num_spaces) * space_width;
+                        rshadow.right = rshadow.right - (u8->length() - num_spaces) * space_width;
+                        rshadow.left = rshadow.left - (u8->length() - num_spaces) * space_width;
+                    }
+                    if(draw_shadow) {
+                        override_font->DrawText(NULL, u8->data(), -1, &rshadow, align, color_shadow);
+                    }
+                    override_font->DrawText(NULL, u8->data(), -1, &rect, align, color);
                 }
-                override_font->DrawText(NULL, u8->data(), -1, &rect, align, color);
             }
-            else {
-                if(draw_shadow) {
-                    override_font->DrawTextW(NULL, u16->data(), -1, &rshadow, align, color_shadow);
+            else if(u16) {
+                if(!u16->empty()) {
+                    if(align == DT_RIGHT && u16->back() == static_cast<wchar_t>(' ')) {
+                        // Add the trailing spaces as an offset to the rect struct.
+                        auto num_spaces = u16->find_last_not_of(static_cast<wchar_t>(' '));
+                        rect.right = rect.right - (u16->length() - num_spaces) * space_width;
+                        rect.left = rect.left - (u16->length() - num_spaces) * space_width;
+                        rshadow.right = rshadow.right - (u16->length() - num_spaces) * space_width;
+                        rshadow.left = rshadow.left - (u16->length() - num_spaces) * space_width;
+                    }
+                    if(draw_shadow) {
+                        override_font->DrawTextW(NULL, u16->data(), -1, &rshadow, align, color_shadow);
+                    }
+                    override_font->DrawTextW(NULL, u16->data(), -1, &rect, align, color);
                 }
-                override_font->DrawTextW(NULL, u16->data(), -1, &rect, align, color);
             }
         }
         else {
@@ -434,6 +493,28 @@ namespace Chimera {
         text_list.clear();
     }
 
+    static LPD3DXFONT get_d3dx9_resource_for_vector_font(VectorFont *vector_font) {
+        LPD3DXFONT d3dx9_font = NULL;
+        switch(font_data->style) {
+            case 1:
+                d3dx9_font = reinterpret_cast<LPD3DXFONT>(vector_font->bold.hardware_format);
+                break;
+            case 2:
+                d3dx9_font = reinterpret_cast<LPD3DXFONT>(vector_font->italic.hardware_format);
+                break;
+            case 3:
+                d3dx9_font = reinterpret_cast<LPD3DXFONT>(vector_font->condensed.hardware_format);
+                break;
+            case 4:
+                d3dx9_font = reinterpret_cast<LPD3DXFONT>(vector_font->underline.hardware_format);
+                break;
+            default:
+                d3dx9_font = reinterpret_cast<LPD3DXFONT>(vector_font->regular.hardware_format);
+                break;
+        }
+        return d3dx9_font;
+    }
+
     std::int16_t font_pixel_height(const std::variant<TagID, GenericFont> &font) noexcept {
         // Find the font
         TagID font_tag = get_generic_font_if_generic(font);
@@ -447,8 +528,20 @@ namespace Chimera {
         }
 
         auto *tag = get_tag(font_tag);
-        auto *tag_data = tag->data;
-        return *reinterpret_cast<std::uint16_t *>(tag_data + 0x4) + *reinterpret_cast<std::uint16_t *>(tag_data + 0x6);
+        std::int16_t height = 0;
+        if(tag->primary_class == TAG_CLASS_VECTOR_FONT) {
+            VectorFont *tag_data = reinterpret_cast<VectorFont *>(tag->data);
+            LPD3DXFONT d3dx9_font = get_d3dx9_resource_for_vector_font(tag_data);
+            height = tag_data->font_size;
+            if(!d3dx9_font) { 
+                return 0; // return 0 if the font is not loaded yet to avoid render the text in the wrong place
+            }
+        }
+        else {
+            auto *tag_data = tag->data;
+            height = *reinterpret_cast<std::uint16_t *>(tag_data + 0x4) + *reinterpret_cast<std::uint16_t *>(tag_data + 0x6);
+        }
+        return height;
     }
 
     template <typename C> static void get_dimensions_template(std::int32_t &width, std::int32_t &height, const C *text) {
@@ -458,10 +551,11 @@ namespace Chimera {
     template<typename T> std::int16_t text_pixel_length_t(const T *text, const std::variant<TagID, GenericFont> &font) {
         // Find the font
         TagID font_tag = get_generic_font_if_generic(font);
+        auto *tag = get_tag(font_tag);
         LPD3DXFONT override_font = get_override_font(font);
 
         // Do the buffer thing
-        T buffer[1024];
+        T buffer[1025];
         std::size_t buffer_length = 0;
         for(const T *i = text; *i && buffer_length + 1 < sizeof(buffer) / sizeof(T); i++, buffer_length++) {
             if(*i == '|' && (i[1] == 'n')) {
@@ -474,26 +568,29 @@ namespace Chimera {
         }
         buffer[buffer_length] = 0;
 
+        if(tag->primary_class == TAG_CLASS_VECTOR_FONT) {
+            VectorFont *vector_font = reinterpret_cast<VectorFont *>(tag->data);
+            LPD3DXFONT d3dx9_font = get_d3dx9_resource_for_vector_font(vector_font);
+            override_font = d3dx9_font;
+            if(!d3dx9_font) { 
+                return 0; // the font is not loaded yet
+            }
+        }
+
         if(override_font) {
             RECT rect;
 
-            // Find spaces on right
-            int trailing = 0;
-            for(const T *q = text; *q; q++) {
-                if(*q == ' ') {
-                    trailing++;
-                }
-                else {
-                    trailing = 0;
-                }
-            }
+            // DrawText automatically strips any trailing spaces before rendering. Since we are
+            // calculating the width, we need these. Work around the issue by adding a character at
+            // the end of the buffer, then subtracting the width of it from the final result.
+            int added_width = 0;
+            if (buffer_length > 1 && buffer_length < 1024 && buffer[buffer_length-1] == ' '){
+                buffer[buffer_length] = '_';
+                buffer[++buffer_length] = 0;
 
-            // Find how long a space is (yes it's this much of a pain; please don't ask)
-            override_font->DrawText(NULL, " .", -1, &rect, DT_CALCRECT, 0xFFFFFFFF);
-            int space_dot = rect.right - rect.left;
-            override_font->DrawText(NULL, ".", -1, &rect, DT_CALCRECT, 0xFFFFFFFF);
-            int dot = rect.right - rect.left;
-            int trailing_space = (space_dot - dot) * trailing;
+                override_font->DrawText(NULL, "_", -1, &rect, DT_CALCRECT, 0xFFFFFFFF);
+                added_width = rect.right - rect.left;
+            }
 
             if(sizeof(T) == sizeof(char)) {
                 override_font->DrawText(NULL, reinterpret_cast<const char *>(buffer), -1, &rect, DT_CALCRECT, 0xFFFFFFFF);
@@ -503,7 +600,7 @@ namespace Chimera {
             }
 
             auto res = get_resolution();
-            return static_cast<int>((rect.right - rect.left + trailing_space) * 480 + 240) / res.height;
+            return static_cast<int>((rect.right - rect.left - added_width) * 480 + 240) / res.height;
         }
 
         struct Character {
@@ -512,9 +609,6 @@ namespace Chimera {
             char i_stopped_caring[16];
         };
         static_assert(sizeof(Character) == 0x14);
-
-        // Get the tag
-        auto *tag = get_tag(font_tag);
 
         // If it's not loaded, don't care
         if(tag->indexed && reinterpret_cast<std::uintptr_t>(tag->data) < 65536) {
@@ -667,7 +761,6 @@ namespace Chimera {
                         text[i] = text[i + 1];
                     }
 
-                    text_data++;
                     last_char_was_caret = false;
                     continue;
                 }
@@ -740,6 +833,52 @@ namespace Chimera {
         }
     }
 
+    void override_custom_font(TagID font_tag, std::string family, int size, int weight, std::pair<int, int> offset, std::pair<int, int> shadow) {
+        auto *tag = get_tag(font_tag);
+        if(!tag) {
+            throw std::runtime_error("invalid font tag");
+        }
+
+        // Check if font override exists
+        for(std::size_t i = 0; i < map_custom_overrides.size(); i++) {
+            if(map_custom_overrides[i].tag_id.whole_id == font_tag.whole_id) {
+                throw std::runtime_error("font already overrode");
+            }
+        }
+
+        auto scale = get_resolution().height / 480.0;
+        int scaled_size = size * scale;
+        int shadow_x = shadow.first * (scale / 2);
+        int shadow_y = shadow.second * (scale / 2);
+        int offset_x = offset.first * (scale / 2);
+        int offset_y = offset.second * (scale / 2);
+        auto &font = map_custom_overrides.emplace_back(CustomFontOverride{family, font_tag, nullptr, weight, scaled_size, std::make_pair(shadow_x, shadow_y), std::make_pair(offset_x, offset_y)});
+
+        if(dev) {
+            D3DXCreateFontA(dev, font.scaled_size, 0, font.weight, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, font.family.c_str(), &font.override);
+
+            for(auto &text : text_list) {
+                if(font.tag_id == text.font) {
+                    text.override = font.override;
+                }
+            }
+        }
+    }
+
+    void clear_custom_font_overrides() noexcept {
+        if(dev) {
+            for(auto &font : map_custom_overrides) {
+                for(auto &text : text_list) {
+                    if(font.tag_id == text.font) {
+                        text.override = NULL;
+                    }
+                }
+                font.override->Release();
+            }
+        }
+        map_custom_overrides.clear();
+    }
+
     extern "C" {
         const void *draw_text_8_bit_original;
         const void *draw_text_16_bit_original;
@@ -764,7 +903,7 @@ namespace Chimera {
                     shadow.second = ini->get_value_long("font_override." override_name "_font_shadow_offset_y").value_or(2) * (scale/2); \
                     offset.first = ini->get_value_long("font_override." override_name "_font_offset_x").value_or(0) * (scale/2); \
                     offset.second = ini->get_value_long("font_override." override_name "_font_offset_y").value_or(0) * (scale/2); \
-                    D3DXCreateFont(device, static_cast<INT>(size * scale), 0, weight, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, family, &override_var); \
+                    D3DXCreateFontA(device, static_cast<INT>(size * scale), 0, weight, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, family, &override_var); \
                 }
 
             generate_font(system_font_override, "system", system_font_shadow, system_font_offset);
@@ -775,6 +914,11 @@ namespace Chimera {
             generate_font(ticker_font_override, "ticker", ticker_font_shadow, ticker_font_offset);
 
             #undef generate_font
+
+            // Reload custom font overrides
+            for(auto &font : map_custom_overrides) {
+                D3DXCreateFontA(dev, font.scaled_size, 0, font.weight, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, font.family.c_str(), &font.override);
+            }
         }
     }
 
@@ -804,7 +948,19 @@ namespace Chimera {
             ticker_font_override->Release();
             ticker_font_override = nullptr;
         }
+        for(auto &font : map_custom_overrides) {
+            font.override->Release();
+            font.override = nullptr;
+        }
         dev = nullptr;
+    }
+
+    extern "C" {
+        HRESULT (FAR WINAPI * D3DXCreateFontFN)(LPDIRECT3DDEVICE9, INT, UINT, UINT, UINT, BOOL, DWORD, DWORD, DWORD, DWORD, LPCTSTR, LPD3DXFONT) = 0;
+
+        __stdcall HRESULT D3DXCreateFontA(LPDIRECT3DDEVICE9 a, INT b, UINT c, UINT d, UINT e, BOOL f, DWORD g, DWORD h, DWORD i, DWORD j, LPCTSTR k, LPD3DXFONT l) {
+            return D3DXCreateFontFN(a,b,c,d,e,f,g,h,i,j,k,l);
+        }
     }
 
     void setup_text_hook() noexcept {
@@ -818,39 +974,51 @@ namespace Chimera {
 
         auto *chimera_ini = get_chimera().get_ini();
         if(chimera_ini->get_value_bool("font_override.enabled").value_or(false)) {
-            auto fonts_dir = std::filesystem::path("fonts");
-            if(std::filesystem::is_directory(fonts_dir)) {
-                try {
-                    for(auto &f : std::filesystem::directory_iterator(fonts_dir)) {
-                        if(!f.is_regular_file() || (f.path().extension().string() != ".otf" && f.path().extension().string() != ".ttf" && f.path().extension().string() != ".ttc")) {
-                            continue;
-                        }
-
-                        std::printf("Loading font %s...", f.path().string().c_str());
-                        std::fflush(stdout);
-                        if(AddFontResourceEx(f.path().string().c_str(), FR_PRIVATE, 0)) {
-                            std::printf("done\n");
-                        }
-                        else {
-                            std::printf("FAILED\n");
-                            char error_message[256 + MAX_PATH];
-                            std::snprintf(error_message, sizeof(error_message), "Failed to load %s.\nMake sure this is a valid font.", f.path().string().c_str());
-                            MessageBox(nullptr, error_message, "Failed to load font", MB_ICONERROR | MB_OK);
-                            std::exit(EXIT_FAILURE);
-                        }
-                    }
-                }
-                catch(std::exception &e) {
-                    MessageBox(nullptr, e.what(), "Failed to iterate through font directory", MB_ICONERROR | MB_OK);
-                    std::exit(EXIT_FAILURE);
-                }
+            // First load d3dx9_43.dll
+            auto *d3dx9_43 = GetModuleHandle("d3dx9_43.dll");
+            if(!d3dx9_43) {
+                d3dx9_43 = LoadLibrary("d3dx9_43.dll");
             }
 
-            add_d3d9_end_scene_event(on_add_scene);
-            add_d3d9_reset_event(on_reset);
+            // Okay, did we do that? Let's set this value and initialize things.
+            if(d3dx9_43) {
+                D3DXCreateFontFN = reinterpret_cast<decltype(D3DXCreateFontFN)>(reinterpret_cast<std::uint32_t>(GetProcAddress(d3dx9_43, "D3DXCreateFontA")));
 
-            // Hell yes
-            initialize_hud_text();
+                auto fonts_dir = std::filesystem::path("fonts");
+                if(std::filesystem::is_directory(fonts_dir)) {
+                    try {
+                        for(auto &f : std::filesystem::directory_iterator(fonts_dir)) {
+                            if(!f.is_regular_file() || (f.path().extension().string() != ".otf" && f.path().extension().string() != ".ttf" && f.path().extension().string() != ".ttc")) {
+                                continue;
+                            }
+
+                            std::printf("Loading font %s...", f.path().string().c_str());
+                            std::fflush(stdout);
+                            if(AddFontResourceEx(f.path().string().c_str(), FR_PRIVATE, 0)) {
+                                std::printf("done\n");
+                            }
+                            else {
+                                std::printf("FAILED\n");
+                                char error_message[256 + MAX_PATH];
+                                std::snprintf(error_message, sizeof(error_message), "Failed to load %s.\nMake sure this is a valid font.", f.path().string().c_str());
+                                show_error_box("Font error", error_message);
+                                std::exit(EXIT_FAILURE);
+                            }
+                        }
+                    }
+                    catch(std::exception &e) {
+                        show_error_box("Font error", "Failed to iterate through font directory.");
+                        std::exit(EXIT_FAILURE);
+                    }
+                }
+
+                add_d3d9_end_scene_event(on_add_scene);
+                add_d3d9_reset_event(on_reset);
+                add_map_load_event(clear_custom_font_overrides, EVENT_PRIORITY_BEFORE);
+
+                // Hell yes
+                initialize_hud_text();
+            }
         }
     }
 

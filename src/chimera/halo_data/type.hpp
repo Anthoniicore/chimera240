@@ -42,6 +42,13 @@ namespace Chimera {
     using TagID = HaloID;
     using ObjectID = HaloID;
     using PlayerID = HaloID;
+
+    struct TagString {
+        char string[0x20];
+    };
+    static_assert(sizeof(TagString) == 0x20);
+
+    using Pixel32 = std::uint32_t;
 }
 
 #endif

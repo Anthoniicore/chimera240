@@ -37,11 +37,14 @@ namespace Chimera {
         std::byte *data;
 
         /**
-         * This is set to 1 if indexed. Otherwise unused once the map is fully loaded
+         * This is set to 1 if indexed. Used to check if the tag has been loaded yet
          */
         std::uint32_t indexed;
 
-        PAD(0x4);
+        /**
+         * This is normally 4 bytes of padding, but we are going to use it to know if the tag was loaded from Custom Edition resource maps
+         */
+        std::uint32_t externally_loaded;
     };
     static_assert(sizeof(Tag) == 0x20);
 
@@ -56,7 +59,7 @@ namespace Chimera {
         TagID scenario_tag;
 
         /** Unused random number */
-        std::uint32_t random_number;
+        std::uint32_t checksum;
 
         /** Number of tags in tag array */
         std::uint32_t tag_count;
@@ -80,6 +83,30 @@ namespace Chimera {
         std::uint32_t tags_literal;
     };
     static_assert(sizeof(TagDataHeader) == 0x28);
+
+    struct TagReference {
+        TagClassInt tag_class;
+        char *path;
+        size_t path_size;
+        TagID tag_id;
+    };
+    static_assert(sizeof(TagReference) == 0x10);
+
+    struct TagBlock {
+        std::uint32_t count;
+        std::byte *address;
+        std::byte *definition;
+    };
+    static_assert(sizeof(TagBlock) == 0xC);
+
+    struct TagData {
+        std::uint32_t size;
+        std::uint32_t flags;
+        std::uint32_t file_offset;
+        std::byte *address;
+        std::byte *definition;
+    };
+    static_assert(sizeof(TagData) == 0x14);
 
     /**
      * Get the tag data address
@@ -120,6 +147,19 @@ namespace Chimera {
      * @return           pointer to the tag if found, nullptr if not
      */
     Tag *get_tag(std::size_t tag_index) noexcept;
+
+    /**
+     * Get tag block data
+     * @param  block tag block
+     * @param  index index of the tag
+     * @param  size  size of block
+
+     * @return           pointer to the block data
+     */
+    std::byte *get_tag_block_data(TagBlock *block, std::uint32_t index, std::uint32_t size) noexcept;
+
+#define GET_TAG_BLOCK_ELEMENT(t, b, i) reinterpret_cast<t *>(get_tag_block_data(b, i, sizeof(t)))
+
 }
 
 #endif

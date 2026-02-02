@@ -7,18 +7,12 @@ for more information.
 
 The official repository is hosted at https://github.com/SnowyMouse/chimera
 
-
-
-
 ## Table of contents
 - [Installation](#installation)
 - [Mod support](#mod-support)
 - [Features](#features)
 - [FAQ](#faq)
-
-
-
-
+- [Compilation Guide](#compilation-guide)
 
 ## Installation
 Here is the installation procedure for installing Chimera:
@@ -36,22 +30,14 @@ Uninstalling Chimera is simple:
 1. Delete Chimera's strings.dll and optionally chimera.ini, fonts, and/or mods.
 2. Rename your backed up copy of Halo's Strings.dll back to `strings.dll`.
 
-
-
-
-
 ## Mod support
 You can install binary mods (i.e. dlls) by creating a folder called "mods" and
 copying the dlls into the directory.
 
-> **NOTE**: Chimera does *not* support dll mods including HAC2 or Open Sauce.
+> **NOTE**: Chimera does *not* support some dll mods such as HAC2 or Open Sauce.
 > This is because they modify the game in similar ways, resulting in them
 > conflicting with one another. Supporting just one of these mods would mean
 > extra development time that we don't have. Sorry.
-
-
-
-
 
 ## Features
 Chimera provides a number of features and enhancements to the base Halo game.
@@ -63,13 +49,14 @@ game.
 - [Ini features](#ini-features)
 - [Commands](#commands)
 
-
 ### Passive features
-These are features that are always (or are on).
+These are features that are always on.
 - [Interpolation](#interpolation)
 - [Limit increase](#limit-increase)
 - [Compressed maps](#compressed-maps)
+- [Campaign in Custom Edition](#campaign-in-custom-edition)
 - [Camera shake fix](#camera-shake-fix)
+- [Checkpoint fix](#checkpoint-fix)
 - [Reduced DRM](#reduced-drm)
 - [Descope fix](#descope-fix)
 - [Extended description fix](#extended-description-fix)
@@ -79,6 +66,9 @@ These are features that are always (or are on).
 - [Model LOD fix](#model-lod-fix)
 - [FOV fix](#fov-fix)
 - [Sun fix](#sun-fix)
+- [Zoom blur fix](#zoom-blur-fix)
+- [Multitexture overlay fix](#multitexture-overlay-fix)
+- [Z-fighting fix](#z-fighting-fix)
 - [Custom chat](#custom-chat)
 - [NVIDIA camo fix](#nvidia-camo-fix)
 - [Contrail fix](#contrail-fix)
@@ -101,8 +91,7 @@ These are features that are always (or are on).
 #### Interpolation
 The game has an issue where object movement is tied to tick rate, thus objects
 will never move faster than 30 frames per second. Chimera adds interpolation to
-the game for objects. Unlike MCC, it also adds it for cutscenes and plasma
-projectiles, too.
+the game for objects and other effects.
 
 #### Limit increase
 Chimera increases some of the limits of the game. Note that, unless you play a
@@ -115,16 +104,24 @@ increases:
 - Draw distance increased to 2250 world units (~6.86 km)
 
 #### Compressed maps
-Chimera supports [Invader](https://github.com/SnowyMouse/invader)-compressed
-maps. This allows you to take advantage of the blazingly fast zstd compression
+Chimera supports maps compressed with the chimera-compress compression tool.
+This allows you to take advantage of the blazingly fast zstd compression
 algorithm, drastically cutting down map size.
 
 If [maps in RAM](#memory-settings) is enabled, compressed maps will be
 decompressed directly into RAM. Otherwise, temp files will be used (placed in
 Chimera's folder).
 
+#### Campaign in Custom Edition
+Normally, Halo Custom Edition does not display a "campaign" option on the main
+menu. If all of the campaign maps are availible in the maps folder, Chimera will
+reenable the "campaign" option just like in the retail version.
+
 #### Camera shake fix
 Chimera fixes a bug where camera shaking does not work at high frame rates.
+
+#### Checkpoint fix
+Chimera fixes a bug where checkpoints time out too fast at high frame rates.
 
 #### Reduced DRM
 Normally, Halo does not allow you to join servers with someone that has the
@@ -173,8 +170,8 @@ size check.
 #### Model LOD fix
 The game uses your vertical resolution to determine how detailed to draw a
 model. However, this results in levels like The Pillar of Autumn showing the
-highest LOD for some mods when it shouldn't, leading to infamous glitches like
-the "4K headless chief" glitch. Chimera makes it scale by 480p, instead.
+highest LOD for some models when it shouldn't, leading to infamous glitches
+like the "4K headless chief" glitch. Chimera makes it scale by 480p, instead.
 
 #### FOV fix
 There is a bug in the game where, when you increase the vertical resolution of
@@ -186,6 +183,20 @@ what `chimera_fov` is for.
 #### Sun fix
 Lens flares are drawn at a set number of pixels regardless of vertical
 resolution. Chimera makes it scale by 768p, instead.
+
+#### Zoom blur fix
+The zoom blur radius is a set number of pixels regardless of vertical resolution.
+Chimera makes it scale by 480p, instead. Chimera also increases the resolution of
+the zoom blur effect, improving the quality.
+
+#### Multitexture overlay fix
+Chimera fixes an issue where multitexture overlays in weapon_hud_interface tags
+do not blend correctly (notably the sniper rifle angle ticks).
+
+#### Z-fighting fix
+The game has an issue where as the player gets further from the center of a map,
+Z-fighting gets progressively worse due to loss of floating point precision.
+Chimera attempts to reduce decals Z-fighting with level geometry.
 
 #### Custom chat
 The Keystone chat is crashy and broken. Chimera adds a replacement chat.
@@ -264,8 +275,9 @@ with this fix.
 #### Map downloading
 Chimera will automatically attempt to download maps off of the
 [HAC2 Map repo](http://maps.halonet.net/maplist.php) upon joining a server that
-is playing a map you don't have. These maps are stored under `chimera/maps` in
-your Halo profiles folder.
+is playing a map you don't have. A different map source can be configured using
+the `download_template` setting. These maps are stored under `chimera/maps` in
+your Halo profiles folder by default (see the `download_map_path` setting).
 
 #### Lua scripting
 Lua scripting ported from Chimera -572. Scripts in the global folder are loaded
@@ -296,6 +308,8 @@ Below are the features you can take advantage of.
 #### Halo settings
 These features exist to modify how Halo is initialized.
 - `path` (changes the profile path location)
+- `map_path` (changes the path maps will be loaded from)
+- `download_map_path` (changes the path custom maps are downloaded to)
 - `exec` (changes the init text file loaded)
 - `server_port` (set the default server port)
 - `client_port` (set the default client port)
@@ -322,8 +336,9 @@ need an LAA-patched executable to use this feature.
 - `map_size` (size of buffer in MiB for loading maps)
 - `benchmark` (shows a benchmark whenever a map is loaded)
 - `download_font` (change the font used for downloading)
-- `download_preferred_node` (change the initial server node tested)
+- `download_template` (URL template used to downloading maps)
 - `download_retail_maps` (allow downloading of retail Halo PC maps - UNSAFE)
+- `load_embedded_lua` (enables loading Lua scripts embedded into map files)
 
 #### Font override settings
 This allows you to override fonts Chimera uses with system fonts, allowing you
@@ -342,6 +357,7 @@ vidmode. You can even use refresh rates in excess of 120 Hz.
 - `vsync` (enable double buffer vSync to reduce tearing)
 - `windowed` (display Halo in a window)
 - `borderless` (display Halo in borderless fullscreen - required windowed mode)
+- `af` (Set anisotropic filtering level)
 
 #### Controller settings
 These settings allow you to configure gamepads. See the included chimera.ini
@@ -359,7 +375,6 @@ included chimera.ini file for more information on these settings.
 This allows you to execute Chimera commands, Halo commands, or Halo scripts
 when the key combination is invoked. See the included chimera.ini file for more
 information on these settings.
-
 
 ### Custom Edition map support on retail
 Chimera can enable Halo Custom Edition map support when playing the base Halo PC
@@ -382,7 +397,6 @@ rename them to have the `custom_` prefixes and copy them into your maps folder.
 > You need these to load Halo PC maps. Also, Chimera will *not* enable this
 > feature if *any* of the above files are missing.
 
-
 ### Commands
 Chimera provides a number of extra features that can be turned on. Most of
 these features are off by default. Commands are stored in preferences.txt in
@@ -393,7 +407,6 @@ the chimera folder created by Chimera.
 - [Auto uncrouching](#auto-uncrouching)
 - [Block all bullshit](#block-all-bullshit)
 - [Block auto center](#block-auto-center)
-- [Block buffering](#block-buffering)
 - [Block button quotes](#block-button-quotes)
 - [Block equipment rotation](#block-equipment-rotation)
 - [Block extra weapon](#block-extra-weapon)
@@ -402,6 +415,7 @@ the chimera folder created by Chimera.
 - [Block hold F1](#block-hold-f1)
 - [Block letterbox](#block-letterbox)
 - [Block loading screen](#block-loading-screen)
+- [Block multitexture overlays](#block-multitexture-overlays)
 - [Block mouse acceleration](#block-mouse-acceleration)
 - [Block server IP](#block-server-ip)
 - [Block zoom blur](#block-zoom-blur)
@@ -444,6 +458,7 @@ the chimera folder created by Chimera.
 - [Uncap cinematic](#uncap-cinematic)
 - [Unblock all extra weapons](#unblock-all-extra-weapons)
 - [Widescreen fix](#widescreen-fix)
+- [Alternate bump attenuation](#alternate-bump-attenuation)
 
 #### Aim assist
 Halo's aim assist was broken in the PC release. Chimera fixes it. It only works
@@ -461,8 +476,8 @@ equivalent mod), or else desyncing will occur.
 
 #### Anisotropic filtering
 This enables the same thing that is done in config.txt but without having to
-edit it. Note that this only applies to the level geometry, not individual
-objects. You'd need AF enabled externally to do that.
+edit it. Chimera also applies anisotropic filtering to individual objects
+instead of just level geometry.
 
 **Usage:** `chimera_af [true/false]`
 
@@ -474,12 +489,10 @@ full speed. You can re-enable this behavior if you want.
 
 #### Block all bullshit
 This feature runs the following commands:
-- `chimera_block_buffering 1`
 - `chimera_block_gametype_indicator 1`
 - `chimera_block_gametype_rules 1`
 - `chimera_block_hold_f1 1`
 - `chimera_block_loading_screen 1`
-- `chimera_block_zoom_blur 1`
 - `chimera_block_mouse_acceleration 1`
 
 **Usage:** `chimera_block_all_bullshit`
@@ -488,12 +501,6 @@ This feature runs the following commands:
 Set whether or not auto centering in vehicles is disabled.
 
 **Usage:** `chimera_block_auto_center [true/false]`
-
-#### Block buffering
-This feature is known to reduce input lag, and it works like the feature in
-config.txt. You can enable this behavior if you want.
-
-**Usage:** `chimera_block_buffering [true/false]`
 
 #### Block button quotes
 Remove the quotation marks in button prompts (e.g. Hold "E")
@@ -545,6 +552,13 @@ loading screen.
 
 **Usage:** `chimera_block_loading_screen [true/false]`
 
+#### Block multitexture overlays
+Multitexture overlays are used for the animated sniper scope ticks.
+Given that most sniper scope tags are broken and misaligned, Chimera provides
+a way to disable them.
+
+**Usage:** `chimera_block_multitexture_overlays [true/false]`
+
 #### Block mouse acceleration
 Halo uses raw input, thus it bypasses the mouse acceleration setting of your
 operating system (unless you run the game in Wine). However, Halo adds its own
@@ -560,8 +574,9 @@ this feature if you want.
 **Usage:** `chimera_block_server_ip [true/false]`
 
 #### Block zoom blur
-Halo's zoom blur looks like ass on high resolutions. This feature removes it
-without requiring you to use DisableAlphaRenderTargets or safe mode.
+By default, Halo's zoom blur looks like ass on high resolutions. Chimera fixes this
+but this feature removes the blur effect if you want without requiring you to use
+DisableAlphaRenderTargets or safe mode.
 
 **Usage:** `chimera_block_zoom_blur [true/false]`
 
@@ -675,12 +690,11 @@ Spanish.
 **Usage:** `chimera_language [en/es]`
 
 #### Model detail
-Change the model detail. Higher values increase LODs. This will not make models
-extra detailed. Instead, it will change the threshold for when higher LODs
-appear. Extremely high values will cause the aforementioned "4K headless chief"
-glitch, except at any vertical resolution this time.
+Force highest LOD level for all models. The exception being the cryotube model
+which will always scale by 480p regardless of this to prevent the afformentioned
+"4K headless chief" glitch.
 
-**Usage:** `chimera_model_detail [detail]`
+**Usage:** `chimera_model_detail [true/false]`
 
 #### Mouse sensitivity
 Set the mouse sensitivity. This is more granular than using Halo's settings. It
@@ -715,7 +729,7 @@ List player indices.
 Send a chat message. Channel 0 is "all", channel 1 is "team", and channel 2 is
 "vehicle". Other channels may be used by mods.
 
-**Usage:** `chimera_set_name <channel> <message>`
+**Usage:** `chimera_send_chat_message <channel> <message>`
 
 #### Set color
 Set your in-game color for free-for-all gametypes.
@@ -802,13 +816,19 @@ Uncap the cinematic frame rate from 30 FPS.
 #### Widescreen fix
 Fix the scaling of HUD, menu, and text elements for wider aspect ratios. This
 may break some maps, and this will not be fixed as fixing one thing will break
-another thing due to the nature of these fixes.
+another thing due to the nature of these fixes. Setting 1 has the HUD fill the
+screen, setting 2 restricts the HUD to the center 4:3 area of the screen, while
+setting 3 restricts the HUD to the center 16:9 area of the screen.
 
-**Usage:** `chimera_widescreen_fix [true/false]`
+**Usage:** `chimera_widescreen_fix [0/1/2/3]`
 
+#### Alternate bump attenuation
+Force enables the alternate bump attenuation method for envrionemntal bumpmapping.
+With this disabled, chimera will only apply the alternate bump attenuation method
+to shader_environment tags with the appropriate flag set and otherwise use the
+standard "classic" method.
 
-
-
+**Usage:** `chimera_force_alternate_bump_attenuation [true/false]`
 
 ## FAQ
 Below is a list of frequently asked questions. These questions are either based
@@ -817,24 +837,21 @@ worth answering in a readme.
 
 - [Will Chimera run on my system?]
 - [Can I use Chimera under a license besides GNU GPL version 3?]
-- [Why am I seeing an error saying that strings.dll is missing?]
+- [Why are my custom fonts not working?]
 - [Why does Halo's gamma setting not work when Chimera is installed?]
 - [Why is there no auto updater built into Chimera?]
 - [Why do I get an error when joining Custom Edition servers with modded maps?]
 
-
-
 ### Will Chimera run on my system?
-Short answer: If your PC is semi-recent and uses Windows 7 or newer, it'll work.
-Note that Chimera isn't too taxing, especially on modern systems, but it can
-make Halo harder to run if you're on very ancient hardware.
+Short answer: If your PC uses Windows 7 or later, it'll work. Note
+that, while Chimera isn't too taxing, especially on modern systems, it can make
+Halo harder to run if you're on extremely ancient hardware.
 
-Long answer: There are the hard requirements:
+Long answer: There are the requirements:
 
-- OS (if on Windows): Windows 7 or newer
-- Wine (if on Linux): Wine 4.0 or newer\*
-
-\*We test on the latest wine-staging 5.0 version, but 4.0 should work.
+- OS (if on Windows): Windows 7 or newer, or
+Windows XP and newer if using the dedicated Windows XP release.
+- Wine (if on Linux): Wine 4.0 or newer
 
 If your PC does not at least meet the above requirements, Chimera may fail to
 run properly due to the underlying API being older.
@@ -856,18 +873,12 @@ released in the year 2011 - over seven years ago at the time of writing this
 sentence.
 
 ### Can I use Chimera under a license besides GNU GPL version 3?
-Short answer: Probably not.
+Probably not. You would first need to ask *all* of the developers of Chimera for
+permission.
 
-Long answer: It's not impossible. You would first need to ask *all* of the
-developers of upstream Chimera for permission. Chimera, however, also depends
-on [Invader](https://github.com/SnowyMouse/invader) for map compression, and this
-is licensed under the GPL as well. So, you'd have to either remove the Invader
-dependency (thus no map compression - required for map downloading!) or ask
-*all* of the developers of upstream Invader for permission, too.
-
-### Why am I seeing an error saying that strings.dll is missing?
-This error can occur when a required DirectX 9 library isn't installed. The fix
-is to download and run the official DirectX installer from
+### Why are my custom fonts not working?
+This can occur when a required DirectX 9 library isn't installed. The fix is to
+download and run the official DirectX installer from
 https://www.microsoft.com/en-us/download/details.aspx?id=35 .
 
 ### Why does Halo's gamma setting not work when Chimera is installed?
@@ -892,7 +903,7 @@ anyway.
 We are *not* going to provide an option to re-enable it. Again, use [dgVoodoo2],
 instead.
 
-[dgVoodoo2]: http://dege.freeweb.hu/dgVoodoo2/dgVoodoo2.html
+[dgVoodoo2]: http://dege.freeweb.hu/dgVoodoo2/
 
 ### Why is there no auto updater built into Chimera?
 Short answer: Auto updating is *not* actually a feature you want. For the best
@@ -998,11 +1009,53 @@ this check.
 If you *want* to join a server using a modified Halo Custom Edition map on a
 Halo Custom Edition server, then you should forge the CRC32.
 
-
-
 [Will Chimera run on my system?]: #will-chimera-run-on-my-system
 [Can I use Chimera under a license besides GNU GPL version 3?]: #can-i-use-chimera-under-a-license-besides-gnu-gpl-version-3
-[Why am I seeing an error saying that strings.dll is missing?]: #why-am-i-seeing-an-error-saying-that-stringsdll-is-missing
+[Why are my custom fonts not working?]: #why-are-my-custom-fonts-not-working
 [Why does Halo's gamma setting not work when Chimera is installed?]: #why-does-halos-gamma-setting-not-work-when-chimera-is-installed
 [Why is there no auto updater built into Chimera?]: #why-is-there-no-auto-updater-built-into-chimera
 [Why do I get an error when joining Custom Edition servers with modded maps?]: #why-do-i-get-an-error-when-joining-custom-edition-servers-with-modded-maps
+
+## Compilation Guide
+To compile Chimera we use the 32-bit MinGW-w64 toolchain.
+
+### Windows
+
+#### MSYS2
+1. If you do not have MSYS2 installed, follow the [installation](https://www.msys2.org/wiki/MSYS2-installation/) instructions.
+2. After it is installed and up to date, install these packages: `pacman -S --needed base-devel mingw-w64-i686-toolchain mingw-w64-i686-cmake mingw-w64-i686-python git`
+3. Create a build directory
+4. From the MINGW32 subsystem, run the cmake command `cmake -S <path to source> -B <build directory> -DCMAKE_BUILD_TYPE=Release` (for release)
+5. build by running `cmake --build <build directory>`
+
+#### Winlibs
+Chimera can also be compiled on windows is using the standalone MinGW toolchain provided by [Winlibs](https://winlibs.com).
+A current version of [Python](https://www.python.org/downloads/windows/) is also required to be installed before following these steps.
+
+1. Ensure Chimera's source code is located in a short path with no spaces to prevent issues with the toolchain. e.g. `C:\source\chimera`
+2. Download the latest 32-bit GCC MinGW-w64 MSVCRT release from [here](https://winlibs.com)
+3. Extract and copy the `mingw32` directory to where Chimera's source is located.
+4. Create an empty `build` directory where Chimera's source is located.
+5. Create a file called `mingw-console.bat` where Chimera's source is located with the following contents:
+```
+@echo off
+set PATH=%~dp0mingw32\bin;%PATH%
+cmd /k
+```
+6. Run `mingw-console.bat`. A console window should open with the correct paths configured to build Chimera. To create a Release build, Run the following commands in the MinGW console window.
+```
+cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+For the correct DLL version information to be set [Git for Windows](https://gitforwindows.org/) must be installed, but this is not required to compile Chimera.
+
+[^1]: It does not strictly have to be extracted to the same directory as Chimera's source. if you put it somewhere else, replace `..` in the cmake command with the path to Chimera's source code.
+
+#### Windows XP
+When running CMake, also pass the argument `-DCHIMERA_WINXP=ON` to enable Windows XP support.
+
+### Linux
+Chimera can be cross-compiled from a Linux host.
+1. Create a build directory
+2. From here run the MinGW cmake command. On Most distros this is `i686-w64-mingw32-cmake -S <path to source> -B <build directory> -DCMAKE_BUILD_TYPE=Release` (for release)
+3. build by running `cmake --build <build directory>`

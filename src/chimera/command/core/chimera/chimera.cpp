@@ -4,9 +4,9 @@
 #include "../../../lua/lua_script.hpp"
 #include "../../../output/output.hpp"
 #include "../../../chimera.hpp"
-#include "../../../version.hpp"
 #include "../../../config/config.hpp"
 #include "../../command.hpp"
+#include "version.hpp"
 
 namespace Chimera {
     bool Chimera::chimera_command(int argc, const char **argv) noexcept {
@@ -21,9 +21,9 @@ namespace Chimera {
                 }
 
                 bool found = false;
-                auto *cmd_cat = cmd.category();
+                auto *cmd_cat = localize(cmd.category());
                 for(auto &category : categories) {
-                    if(std::strcmp(category.data(),cmd_cat) == 0) {
+                    if(category == cmd_cat) {
                         found = true;
                         break;
                     }
@@ -33,7 +33,7 @@ namespace Chimera {
                 if(!found) {
                     bool added = false;
                     for(auto &category : categories) {
-                        if(std::strcmp(category.data(),cmd_cat) > 0) {
+                        if(category > cmd_cat) {
                             added = true;
                             categories.insert(categories.begin() + (&category - categories.data()), cmd_cat);
                             break;
@@ -48,6 +48,7 @@ namespace Chimera {
             ConsoleColor blue_color = { 1.0, 0.3, 0.6, 1 };
 
             // Show everything
+            console_output(blue_color, "smoothy by anthoniicore");
             console_output(ConsoleColor::header_color(), localize("chimera_command_version"), CHIMERA_VERSION_STRING);
             console_output(blue_color, "Lua API version %.3f", CHIMERA_LUA_VERSION); // TODO: TRANSLATE THIS
             console_output(ConsoleColor::header_color(), localize("chimera_command_categories"));
@@ -61,7 +62,7 @@ namespace Chimera {
 
             // Maybe it's a category? See if we can find at least one command with the category.
             for(auto &cmd : chimera.p_commands) {
-                if(std::strcmp(cmd.category(), category) == 0) {
+                if(std::strcmp(localize(cmd.category()), category) == 0) {
                     // Get all commands
                     std::vector<Command *> commands;
                     for(auto &cmd : chimera.p_commands) {
@@ -70,7 +71,7 @@ namespace Chimera {
                             continue;
                         }
 
-                        if(std::strcmp(cmd.category(), category) == 0) {
+                        if(std::strcmp(localize(cmd.category()), category) == 0) {
                             bool added = false;
                             const auto *cmd_name = cmd.name();
                             for(auto *&command : commands) {
@@ -128,7 +129,7 @@ namespace Chimera {
                 if(std::strcmp(cmd.name(), command) == 0) {
                     char help[256] = {};
                     std::size_t help_i = 0;
-                    const char *cmd_help = cmd.help();
+                    const char *cmd_help = localize(cmd.help());
 
                     console_output(ConsoleColor::header_color(), localize("chimera_command_info_for_command"), cmd.name());
 

@@ -18,13 +18,15 @@ namespace Chimera {
      */
     fs::path get_script_data_path(lua_State *state) noexcept {
         static auto &chimera = get_chimera();
-        static auto scripts_data_directory = fs::path(chimera.get_path()) / "lua" / "data";
+        static auto chimera_absolute_path = fs::absolute(chimera.get_path());
+        static auto scripts_data_directory = chimera_absolute_path / "lua" / "data";
 
         // Get script info
         lua_getglobal(state, "script_name");
-        std::string script_filename = lua_tostring(state, -1);
         lua_getglobal(state, "script_type");
+        std::string script_filename = lua_tostring(state, -2);
         std::string script_type = lua_tostring(state, -1);
+        lua_pop(state, 2);
 
         // Remove script file extension
         auto script_name = script_filename.substr(0, script_filename.size() - 4);
@@ -158,7 +160,7 @@ namespace Chimera {
             if(check_path(state, path)) {
                 std::string content = luaL_checkstring(state, 2);
                 bool append_content = (args == 3 && (lua_isboolean(state, 3) && lua_toboolean(state, 3)));
-                
+
                 std::ofstream file;
                 file.open(get_script_data_path(state) / path, (append_content ? std::ios::app : std::ios::trunc));
                 if(file.is_open()) {

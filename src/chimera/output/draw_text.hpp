@@ -8,6 +8,7 @@
 
 #include "../math_trig/math_trig.hpp"
 #include "../halo_data/type.hpp"
+#include "../halo_data/tag.hpp"
 
 namespace Chimera {
     /**
@@ -61,8 +62,8 @@ namespace Chimera {
         // I don't know
         std::uint32_t unknown1;
 
-        // I still don't know
-        std::int16_t unknown_ffff;
+        // The style of the font
+        std::int16_t style;
 
         // Alignment
         FontAlignment alignment;
@@ -77,6 +78,29 @@ namespace Chimera {
         std::uint32_t xy_offset;
     };
     static_assert(sizeof(FontData) == 0x44);
+
+    struct VectorFontStyle { 
+        TagReference data;
+        void *hardware_format;
+        uint32_t space_width;
+        char pad_421[8];
+    };
+    static_assert(sizeof(VectorFontStyle) == 32);
+
+    struct VectorFont { 
+        char pad_538[8];
+        float font_size;
+        float offset_x;
+        float offset_y;
+        char pad_620[12];
+        VectorFontStyle regular;
+        VectorFontStyle bold;
+        VectorFontStyle italic;
+        VectorFontStyle condensed;
+        VectorFontStyle underline;
+        char pad_787[32];
+    };
+    static_assert(sizeof(VectorFont) == 224);
 
     /**
      * Get the font data for the text currently being drawn
@@ -161,6 +185,23 @@ namespace Chimera {
      * @param immediate attempt to render it immediately
      */
     void apply_text_quake_colors(std::wstring text, std::int16_t x, std::int16_t y, std::int16_t width, std::int16_t height, const ColorARGB &default_color, const std::variant<TagID, GenericFont> &font, TextAnchor anchor, bool immediate = false) noexcept;
+
+    /**
+     * Override a non-generic font.
+     * @param font_tag  tag ID of the font to override
+     * @param family    font family to use
+     * @param size      font size
+     * @param weight    font weight
+     * @param offset    displacement offset
+     * @param shadow    shadow offset; if all 0, don't use shadows
+     * @exception       if tag ID is invalid
+     */
+    void override_custom_font(TagID font_tag, std::string family, int size, int weight, std::pair<int, int> offset, std::pair<int, int> shadow);
+
+    /**
+     * Clear custom overrides; release fonts resources.
+     */
+    void clear_custom_font_overrides() noexcept;
 }
 
 #endif
